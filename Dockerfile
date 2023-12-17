@@ -18,7 +18,3 @@ RUN apt update && \
 
 # Copy the current directory contents into the container at /app
 COPY . /app
-
-SET MYSQL_INSTALLER_PWD=N0tS0S3curePassw0rd
-SET MYSQL_INSTALLER_USERID=rtinstall
-SET MYSQL_PWD=N0tS0S3curePassw0rd
