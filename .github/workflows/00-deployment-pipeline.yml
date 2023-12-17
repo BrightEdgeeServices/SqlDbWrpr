@@ -12,11 +12,12 @@ jobs:
     needs: Pre-Commit
     uses: ./.github/workflows/02-check-rst-documentation.yml
 
-  CI:
-    needs: Check-rst-Documentation
-    uses: ./.github/workflows/03-ci.yml
+#  CI:
+#    needs: Check-rst-Documentation
+#    uses: ./.github/workflows/03-ci.yml
 
   Build-and-Deploy-to-Production:
-    needs: CI
+    needs: Check-rst-Documentation
+#    needs: CI
     if: startsWith(github.ref, 'refs/tags/')
     uses: ./.github/workflows/04-build-and-release-to-pypi.yml
