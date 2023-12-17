@@ -1,4 +1,4 @@
-name: Deplyoment Pipeline
+name: Deployment Pipeline
 
 on:
 #  pull_request:
