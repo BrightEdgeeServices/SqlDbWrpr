@@ -10,12 +10,12 @@ import os
 import sys
 from pathlib import Path
 
-import csvwrpr
 import displayfx
 import fixdate
 import mysql.connector
 import pyodbc
 from beetools import msg as bm
+from csvwrpr import csvwrpr
 from mysql.connector import Error
 from mysql.connector import errorcode
 
@@ -574,7 +574,7 @@ class SQLDbWrpr:
                 p_len=self.msg_width,
             )
             rec_cntr = 0
-            pfx = displayfx.DisplayFx(_PROJ_NAME, list_len, p_msg=msg, p_bar_len=self.bar_len)
+            pfx = displayfx.DisplayFx(list_len, p_msg=msg, p_bar_len=self.bar_len)
             csv_file = None
             for i, pkeys_rec in enumerate(prim_key_res):
                 if rec_cntr == 0:
@@ -639,7 +639,7 @@ class SQLDbWrpr:
                 f'Export records table = {p_table_name} ({list_len})',
                 p_len=self.msg_width,
             )
-            dfx = displayfx.DisplayFx(_PROJ_NAME, list_len, p_msg=msg, p_bar_len=self.bar_len)
+            dfx = displayfx.DisplayFx(list_len, p_msg=msg, p_bar_len=self.bar_len)
             for i, row in enumerate(table_res):
                 csv_row = ''
                 for j, field in enumerate(row):
@@ -778,7 +778,6 @@ class SQLDbWrpr:
                     p_len=self.msg_width,
                 )
                 dfx = displayfx.DisplayFx(
-                    _PROJ_NAME,
                     list_len,
                     p_msg=msg,
                     p_verbose=p_verbose,
@@ -798,7 +797,6 @@ class SQLDbWrpr:
                 list_len = len(rows_to_del)
                 msg = bm.display(f'Cleanup ({list_len})', p_len=self.msg_width)
                 dfx = displayfx.DisplayFx(
-                    _PROJ_NAME,
                     list_len,
                     p_msg=msg,
                     p_verbose=p_verbose,
@@ -887,7 +885,6 @@ class SQLDbWrpr:
                     p_len=self.msg_width,
                 )
                 dfx = displayfx.DisplayFx(
-                    _PROJ_NAME,
                     list_len,
                     p_msg=msg,
                     p_verbose=p_verbose,
@@ -971,7 +968,6 @@ class SQLDbWrpr:
             vol_csv_file_name = p_csv_file_name
             while os.path.isfile(vol_csv_file_name):
                 csv_file_data = csvwrpr.CsvWrpr(
-                    _PROJ_NAME,
                     vol_csv_file_name,
                     p_key1=p_key,
                     p_header=p_header,
@@ -1126,7 +1122,6 @@ class SQLDbWrpr:
             c_parm3_rep_str = 0
             c_parm3_def_str = 1
             dfx = displayfx.DisplayFx(
-                _PROJ_NAME,
                 len(csv_file_data[1:]),
                 p_msg=msg,
                 p_verbose=False,
