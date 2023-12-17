@@ -1,6 +1,6 @@
 [project]
 name = 'SQLDbWrpr'
-version = '4.1.3'
+version = '4.1.4'
 authors = [
     { name = 'Hendrik du Toit', email = 'hendrik@brightedge.co.za' },
     { name = 'Henru du Toit', email = 'henru@brightedge.co.za' },
