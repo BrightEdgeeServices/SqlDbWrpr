@@ -19,7 +19,7 @@ repos:
         args: [ --markdown-linebreak-ext=md ]
 
   - repo: https://github.com/executablebooks/mdformat
-    rev: 0.7.22  # Use the ref you want to point at
+    rev: 1.0.0  # Use the ref you want to point at
     hooks:
       - id: mdformat
         args: [ --end-of-line, crlf, README.md, ReleaseNotes.md ]
@@ -36,13 +36,13 @@ repos:
 #        args: [ "--config", ".rstcheck.cfg" ]
 
   - repo: https://github.com/asottile/pyupgrade
-    rev: v3.20.0
+    rev: v3.21.0
     hooks:
       - id: pyupgrade
         args: [ --py311-plus ]
 
   - repo: https://github.com/pycqa/isort
-    rev: 6.0.1
+    rev: 7.0.0
     hooks:
       - id: isort
         args: [ "--profile", "black", "--filter-files", "--force-single-line-imports",
@@ -56,7 +56,7 @@ repos:
         additional_dependencies:
           - tomli
 
-  - repo: https://github.com/psf/black
+  - repo: https://github.com/psf/black-pre-commit-mirror
     rev: 25.9.0
     hooks:
     - id: black
