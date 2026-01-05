@@ -1,31 +1,46 @@
+# pre-commit-config.yaml
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: check-added-large-files
+        args: [ '--maxkb=500' ]
       - id: check-json
       - id: check-merge-conflict
       - id: check-toml
       - id: check-yaml
       - id: debug-statements
-#      - id: double-quote-string-fixer
-#      - id: mixed-line-ending
-#        args: [ --fix=crlf ]
       - id: no-commit-to-branch
         args: [ --branch, master ]
       - id: pretty-format-json
-      - id: requirements-txt-fixer
-#      - id: trailing-whitespace
-#        args: [ --markdown-linebreak-ext=md ]
+        args: [ --autofix, --no-sort-keys ]
+      - id: trailing-whitespace
+        args: [ --markdown-linebreak-ext=md ]
+
+  - repo: https://github.com/executablebooks/mdformat
+    rev: 1.0.0
+    hooks:
+      - id: mdformat
+        args: [ --end-of-line, crlf, README.md, ReleaseNotes.md ]
+        additional_dependencies:
+          - mdformat-black
+          - mdformat-gfm
+
+  - repo: https://github.com/rstcheck/rstcheck
+    rev: v6.2.5
+    hooks:
+      - id: rstcheck
+        additional_dependencies: [ sphinx ]
+        args: [ "--config", ".rstcheck.cfg" ]
 
   - repo: https://github.com/asottile/pyupgrade
-    rev: v3.19.1
+    rev: v3.21.2
     hooks:
       - id: pyupgrade
-        args: [ --py311-plus ]
+        args: [ --py312-plus ]
 
   - repo: https://github.com/pycqa/isort
-    rev: 6.0.0
+    rev: 7.0.0
     hooks:
       - id: isort
         args: [ "--profile", "black", "--filter-files", "--force-single-line-imports",
@@ -35,18 +50,18 @@ repos:
     rev: v2.4.1
     hooks:
       - id: codespell
-        args: [--write, --toml, pyproject.toml]
+        args: [ --write, --toml, pyproject.toml ]
         additional_dependencies:
           - tomli
 
-  - repo: https://github.com/psf/black
-    rev: 25.1.0
+  - repo: https://github.com/psf/black-pre-commit-mirror
+    rev: 25.12.0
     hooks:
     - id: black
       language_version: python3
 
   - repo: https://github.com/pycqa/flake8
-    rev: 7.1.2
+    rev: 7.3.0
     hooks:
     - id: flake8
       language_version: python3
