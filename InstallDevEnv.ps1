@@ -18,6 +18,7 @@ if (Test-Path -Path "$env:PROJECT_DIR\pyproject.toml") {
     Write-Host 'Poetry Install...' -ForegroundColor Yellow
     poetry lock
     poetry install --with dev
+    poetry update --with dev
     Poetry sync --with dev
 }
 Write-Host 'Pre-Commit Install...' -ForegroundColor Yellow

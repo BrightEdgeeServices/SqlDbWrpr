@@ -25,6 +25,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
+    "pydantic-settings (>=2.12.0,<3.0.0)"
 ]
 license = "MIT"
 #license = "Proprietary"
@@ -78,7 +79,7 @@ optional = true
 black = ">=25.1.0"
 codecov = ">=2.1.13"
 flake8 = ">=7.1.1"
-isort = "^5.13.2"
+isort = ">=5.13.2"
 mdformat-gfm = ">=0.4.1"
 mdformat-frontmatter = ">=2.0.8"
 mdformat-footnote = ">=0.1.1"
