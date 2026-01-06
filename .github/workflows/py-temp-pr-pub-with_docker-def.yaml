@@ -1,0 +1,44 @@
+# py-temp-pr-pub-with_docker-def.yaml
+# This is a template and should not be changed unless you are familiar with the
+# reusable GitHub Actions strategy of the company.
+name: Python Template PR Public with Docker
+
+on:
+  push:
+    branches-ignore:
+      - master
+      - main
+    tags:
+      - pr
+
+jobs:
+  py-temp-pr-pub-with_docker-def:
+    permissions:
+      id-token: write
+      contents: write
+      pull-requests: write
+    if: ${{ github.ref_type != 'tag' }}
+    uses: BrightEdgeeServices/devops-automation/.github/workflows/py-wf-pr-pub-with_docker-def.yaml@master
+#    with:
+#      run_publish: true
+    # secrets: inherit
+    secrets:
+      GH_REPO_ACCESS_BEE_MASTER:  ${{secrets.GH_REPO_ACCESS_BEE_MASTER }}
+      GH_REPO_ACCESS_RTE_MASTER:  ${{secrets.GH_REPO_ACCESS_RTE_MASTER }}
+      INSTALLER_USERID:           ${{vars.INSTALLER_USERID }}
+      INSTALLER_PWD:              ${{secrets.INSTALLER_PWD }}
+      MYSQL_DATABASE:             ${{vars.MYSQL_DATABASE }}
+      MYSQL_HOST:                 ${{vars.MYSQL_HOST }}
+      MYSQL_PASSWORD:             ${{secrets.MYSQL_PASSWORD}}
+      MYSQL_ROOT_PASSWORD:        ${{secrets.MYSQL_ROOT_PASSWORD}}
+      MYSQL_TCP_PORT:             ${{vars.MYSQL_TCP_PORT }}
+      # MYSQL_TCP_PORT_EXTERNAL:    ${{vars.MYSQL_TCP_PORT_EXTERNAL }}
+      # MYSQL_TCP_PORT_LOCAL_PROD:  ${{vars.MYSQL_TCP_PORT_LOCAL_PROD }}
+      MYSQL_USER:                 ${{vars.MYSQL_USER}}
+      PROJECT_NAME:               ${{vars.PROJECT_NAME }}
+      RELEASE_EMAIL_USER:         ${{vars.RELEASE_EMAIL_USER }}
+      RELEASE_EMAIL_PASSWORD:     ${{secrets.RELEASE_EMAIL_PASSWORD }}
+      SOCKET_EVENT_SERVICE:       ${{vars.SOCKET_EVENT_SERVICE }}
+      SOCKET_FIDE_PARSER_SERVICE: ${{vars.SOCKET_FIDE_PARSER_SERVICE }}
+      SOCKET_RTEAPI:              ${{vars.SOCKET_RTEAPI }}
+      VENV_ENVIRONMENT:           ${{vars.VENV_ENVIRONMENT }}
