@@ -1,5 +1,4 @@
 # docker-compose.yaml
-name: SqlDbWrpr
 services:
   db:
     container_name: "${PROJECT_NAME}_db"

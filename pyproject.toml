@@ -6,7 +6,7 @@ build-backend = "poetry.core.masonry.api"
 
 [project]
 name = 'SQLDbWrpr'
-version = '4.2.0'
+version = '5.0.0'
 description = 'Wrapper for importing CSV and Text files into MySQL and Postgress'
 authors = [
     { name = "Hendrik du Toit", email = "hendrik@brightedge.co.za" }
