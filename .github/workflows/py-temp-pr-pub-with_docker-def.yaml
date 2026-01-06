@@ -32,8 +32,8 @@ jobs:
       MYSQL_PASSWORD:             ${{secrets.MYSQL_PASSWORD}}
       MYSQL_ROOT_PASSWORD:        ${{secrets.MYSQL_ROOT_PASSWORD}}
       MYSQL_TCP_PORT:             ${{vars.MYSQL_TCP_PORT }}
-      # MYSQL_TCP_PORT_EXTERNAL:    ${{vars.MYSQL_TCP_PORT_EXTERNAL }}
-      # MYSQL_TCP_PORT_LOCAL_PROD:  ${{vars.MYSQL_TCP_PORT_LOCAL_PROD }}
+      MYSQL_TCP_PORT_EXTERNAL:    ${{vars.MYSQL_TCP_PORT_EXTERNAL }}
+      MYSQL_TCP_PORT_LOCAL_PROD:  ${{vars.MYSQL_TCP_PORT_LOCAL_PROD }}
       MYSQL_USER:                 ${{vars.MYSQL_USER}}
       PROJECT_NAME:               ${{vars.PROJECT_NAME }}
       RELEASE_EMAIL_USER:         ${{vars.RELEASE_EMAIL_USER }}
