@@ -2,36 +2,35 @@
 
 ### Added
 
-- New PowerShell setup scripts: `CreateDbSqlScript.ps1`, `InstallDevEnv.ps1`, `SetUpDocker.ps1`, `SetupDotEnv.ps1`, `SetupGitHubAccess.ps1`, `SetupPrivateRepoAccess.ps1`.
-- Docker configuration with `.dockerignore` and `docker-compose.yaml`.
+- New PowerShell setup scripts: `CreateDbSqlScript.ps1`, `InstallDevEnv.ps1`, `SetUpDocker.ps1`, `SetupDotEnv.ps1`, `SetupGitHubAccess.ps1`, `SetupPrivateRepoAccess.ps1`, `install.ps1`.
+- Docker configuration: `.dockerignore`.
 - GitHub Action workflows for PR and Merge processes.
 - SQL setup script `scripts/setup_db.sql`.
-- `README.md` (migrated from `README.rst`).
+- `README.md` (extensively updated with Overview, Features, Installation, and Quick Start).
+- `tests/conftest.py`.
 
 ### Changed
 
 - Major project restructuring and infrastructure updates.
-- Updated `pyproject.toml` to use PEP 621 project metadata.
-- Updated `.gitignore` and `.pre-commit-config.yaml`.
-- Renamed `LICENSE` to `LICENSE.txt`.
-- Improved `sqldbwrpr.py` to handle `bytearray` and `bytes` when fetching databases.
+- Updated `pyproject.toml`: bumped version to `5.0.0`, updated dependencies, and added project metadata.
+- Updated `.gitignore` with more comprehensive exclusions.
+- Updated `.pre-commit-config.yaml`.
+- Improved `src/sqldbwrpr/sqldbwrpr.py` to handle `bytearray` and `bytes` when fetching databases.
+- Updated `docker-compose.yaml` and `coverage.xml`.
 
 ### Removed
 
-- Discontinued GitHub workflows and issue templates.
-- Old `docs` directory and `README.rst`.
-- `.packageit` configuration.
-- `docker-compose.yml` (replaced by `.yaml`) and `docker-rebuild.ps1`.
+- Discontinued GitHub workflows and issue templates (deleted `.github/CODEOWNERS`, issue templates).
+- `.packageit` configuration (deleted `.packageit/packageit.ini`, `.packageit/release.toml`).
 
 ### Statistics
 
-- **Changed files:** 50
-- **Insertions:** 2347
-- **Deletions:** 1962
+- **Changed files:** 32
+- **Insertions:** 1695
+- **Deletions:** 1549
 - **Branch:** hendrik/urs-314-feature-sqldbwrpr-remove-discontinued-workflow
 - **Files changed:**
   - .dockerignore
-  - .flake8
   - .gitattributes
   - .github/CODEOWNERS
   - .github/ISSUE_TEMPLATE/bugfix.md
@@ -39,13 +38,9 @@
   - .github/ISSUE_TEMPLATE/enhancement.md
   - .github/ISSUE_TEMPLATE/hotfix.md
   - .github/ISSUE_TEMPLATE/release.md
-  - .github/dependabot.yaml
-  - .github/workflows/00-deployment-pipeline.yaml
-  - .github/workflows/01-pre-commit-and-document-check.yaml
-  - .github/workflows/03-ci.yaml
-  - .github/workflows/04-build-and-publish-to-pypi.yaml
   - .github/workflows/py-temp-pr-pub-with_docker-def.yaml
   - .github/workflows/py-temp-publish-pub-build_release_notify_after_merge-def.yaml
+  - .gitignore
   - .packageit/packageit.ini
   - .packageit/release.toml
   - .pre-commit-config.yaml
@@ -53,7 +48,6 @@
   - InstallDevEnv.ps1
   - LICENSE.txt
   - README.md
-  - README.rst
   - ReleaseNotes.md
   - SetUpDocker.ps1
   - SetupDotEnv.ps1
@@ -61,18 +55,6 @@
   - SetupPrivateRepoAccess.ps1
   - coverage.xml
   - docker-compose.yaml
-  - docker-compose.yml
-  - docker-rebuild.ps1
-  - docs/Makefile
-  - docs/make.bat
-  - docs/requirements_docs.txt
-  - docs/source/Installation.rst
-  - docs/source/api.rst
-  - docs/source/conf.py
-  - docs/source/conventions.rst
-  - docs/source/examples.rst
-  - docs/source/faq.rst
-  - docs/source/index.rst
   - install.ps1
   - poetry.lock
   - pyproject.toml
