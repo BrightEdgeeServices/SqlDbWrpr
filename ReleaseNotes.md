@@ -26,8 +26,8 @@
 ### Statistics
 
 - **Changed files:** 50
-- **Insertions:** 2335
-- **Deletions:** 1978
+- **Insertions:** 2347
+- **Deletions:** 1962
 - **Branch:** hendrik/urs-314-feature-sqldbwrpr-remove-discontinued-workflow
 - **Files changed:**
   - .dockerignore
@@ -46,7 +46,6 @@
   - .github/workflows/04-build-and-publish-to-pypi.yaml
   - .github/workflows/py-temp-pr-pub-with_docker-def.yaml
   - .github/workflows/py-temp-publish-pub-build_release_notify_after_merge-def.yaml
-  - .gitignore
   - .packageit/packageit.ini
   - .packageit/release.toml
   - .pre-commit-config.yaml
@@ -55,6 +54,7 @@
   - LICENSE.txt
   - README.md
   - README.rst
+  - ReleaseNotes.md
   - SetUpDocker.ps1
   - SetupDotEnv.ps1
   - SetupGitHubAccess.ps1
