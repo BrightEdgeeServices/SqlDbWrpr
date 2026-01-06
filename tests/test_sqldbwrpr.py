@@ -1514,27 +1514,9 @@ class TestSqlDbWrpr:
 #         p_arc_extern_dir=None,
 #         p_arc_incl_ext=None,
 #     )
-#     logger = logging.getLogger(_PROJ_NAME)
-#     logger.setLevel(beetools.DEF_LOG_LEV)
-#     file_handle = logging.FileHandler(beetools.LOG_FILE_NAME, mode='w')
-#     file_handle.setLevel(beetools.DEF_LOG_LEV_FILE)
-#     console_handle = logging.StreamHandler()
-#     console_handle.setLevel(beetools.DEF_LOG_LEV_CON)
-#     file_format = logging.Formatter(beetools.LOG_FILE_FORMAT, datefmt=beetools.LOG_DATE_FORMAT)
-#     console_format = logging.Formatter(beetools.LOG_CONSOLE_FORMAT)
-#     file_handle.setFormatter(file_format)
-#     console_handle.setFormatter(console_format)
-#     logger.addHandler(file_handle)
-#     logger.addHandler(console_handle)
-#
-#     b_tls.print_header(p_cls=p_cls)
-#     success = basic_test()
-#     beetools.result_rep(success, 'Done')
-#     b_tls.print_footer()
-#     if success:
-#         return b_tls.arc_pth
-#     return False
-#
+
+# success = basic_test()
+
 #
 # # end do_tests
 #

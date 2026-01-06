@@ -1,14 +1,9 @@
 # Use an official Python runtime based on Debian 10 "bullseye" as a parent image
-FROM python:3.10.12-bullseye as base
+FROM python:3.13-slim-bullseye as base
 
 # Set the working directory to /app
 WORKDIR /app
 
-# By copying over requirements first, we make sure that Docker will cache
-# our installed requirements rather than reinstall them on every build
-COPY requirements/requirements.txt requirements_test.txt ./
-
-# Install any needed packages specified in requirements.txt
 RUN apt update && \
     apt upgrade -y && \
     apt-get clean && \
