@@ -1,16 +1,15 @@
+# pre-commit-config.yaml
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
       - id: check-added-large-files
+        args: [ '--maxkb=500' ]
       - id: check-json
       - id: check-merge-conflict
       - id: check-toml
       - id: check-yaml
       - id: debug-statements
-#      - id: double-quote-string-fixer
-#      - id: mixed-line-ending
-#        args: [ --fix=crlf ]
       - id: no-commit-to-branch
         args: [ --branch, master ]
       - id: pretty-format-json
@@ -19,27 +18,26 @@ repos:
         args: [ --markdown-linebreak-ext=md ]
 
   - repo: https://github.com/executablebooks/mdformat
-    rev: 1.0.0  # Use the ref you want to point at
+    rev: 1.0.0
     hooks:
       - id: mdformat
         args: [ --end-of-line, crlf, README.md, ReleaseNotes.md ]
         additional_dependencies:
           - mdformat-black
           - mdformat-gfm
-          - mdformat_frontmatter
 
-#  - repo: https://github.com/rstcheck/rstcheck
-#    rev: v6.2.4
-#    hooks:
-#      - id: rstcheck
-#        additional_dependencies: [ sphinx ]
-#        args: [ "--config", ".rstcheck.cfg" ]
+  - repo: https://github.com/rstcheck/rstcheck
+    rev: v6.2.5
+    hooks:
+      - id: rstcheck
+        additional_dependencies: [ sphinx ]
+        args: [ "--config", ".rstcheck.cfg" ]
 
   - repo: https://github.com/asottile/pyupgrade
     rev: v3.21.2
     hooks:
       - id: pyupgrade
-        args: [ --py311-plus ]
+        args: [ --py312-plus ]
 
   - repo: https://github.com/pycqa/isort
     rev: 7.0.0

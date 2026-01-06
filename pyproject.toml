@@ -1,113 +1,124 @@
 [build-system]
-    requires = [
-        "poetry-core>=2.0.0,<3.0.0",
-    ]
-    build-backend = "poetry.core.masonry.api"
+requires = [
+    "poetry-core>=2.0.0,<3.0.0",
+]
+build-backend = "poetry.core.masonry.api"
 
 [project]
-    name = 'SQLDbWrpr'
-    version = '4.3.0'
-    description = 'Wrapper for importing CSV and Text files into MySQL and Postgress'
-
-    authors = [
-        { name = 'Hendrik du Toit', email = 'hendrik@brightedge.co.za' },
-    ]
-    classifiers = [
-        'Development Status :: 5 - Production/Stable',
-        'Intended Audience :: Developers',
-        'Intended Audience :: Information Technology',
-        'Topic :: Software Development',
-        'Topic :: Text Processing',
-        'Topic :: Utilities',
-        'License :: OSI Approved :: MIT License',
-        'Programming Language :: Python :: 3.10',
-        'Programming Language :: Python :: 3.11',
-        'Programming Language :: Python :: 3.12',
-    ]
-    dependencies = [
-    "pydantic-settings (>=2.8.1,<3.0.0)",
+name = 'SQLDbWrpr'
+version = '5.0.0'
+description = 'Wrapper for importing CSV and Text files into MySQL and Postgress'
+authors = [
+    { name = "Hendrik du Toit", email = "hendrik@brightedge.co.za" }
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    'Topic :: Software Development',
+    'Topic :: Text Processing',
+    'Topic :: Utilities',
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "pydantic-settings (>=2.12.0,<3.0.0)",
     "csvwrpr (>=1.16.1,<2.0.0)",
-    "fixdate (>=2.0.1,<3.0.0)",
-    "mysql-connector-python (>=9.2.0,<10.0.0)",
-    "pyodbc (>=5.2.0,<6.0.0)",
-    ]
-    license = "MIT"
-#    license = "Proprietary"
-    license-files = ["LICENSE.txt"]
-    maintainers = [
-        { name = "Hendrik du Toit", email = "hendrikdt@citiqprepaid.co.za" },
-        { name = 'Henru du Toit', email = 'henru@brightedge.co.za' },
-        { name = 'Dirk du Toit', email = 'dirk@brightedge.co.za' },
-    ]
-    readme = { file = 'README.md', content-type = 'text/markdown' }
-    #readme = "README.md"
-    requires-python = ">=3.10"
+    "fixdate (>=2.1.0,<3.0.0)",
+    "mysql-connector (>=2.2.9,<3.0.0)",
+    "pyodbc (>=5.3.0,<6.0.0)"
+]
+license = "MIT"
+#license = "Proprietary"
+license-files = ["LICENSE.txt"]
+maintainers = [
+    { name = "Hendrik du Toit", email = "hendrikdt@citiqprepaid.co.za" },
+    { name = "Henru du Toit", email = "henru@brightedge.co.za" },
+    { name = "Dirk du Toit", email = "dirk@brightedge.co.za" },
+]
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.10"
 
 [project.urls]
-    # documentation = "https://readthedocs.org"
-    Issues = "https://github.com/BrightEdgeeServices/PythonTemplateIt/issues"
-    Changelog = 'https://github.com/BrightEdgeeServices/PythonTemplateIt/blob/enhancement/master/ReleaseNotes.md'
-    Homepage = 'https://github.com/BrightEdgeeServices/PythonTemplateIt'
-    Repository = "https://github.com/BrightEdgeeServices/PythonTemplateIt.git"
+# documentation = "https://readthedocs.org"
+Issues = "https://github.com/BrightEdgeeServices/SqlDbWrpr/issues"
+changelog = 'https://github.com/BrightEdgeeServices/SqlDbWrpr/releases'
+Homepage = "https://github.com/BrightEdgeeServices/SqlDbWrpr"
+Repository = "https://github.com/BrightEdgeeServices/SqlDbWrpr.git"
 
 [tool.black]
-    line-length = 120
-    #skip-string-normalization = true
-    target-version = [
-        "py313",
-    ]
+line-length = 120
+target-version = [
+    "py313",
+]
+extend-exclude = """
+(
+    ^tests/testdata.py
+)
+"""
 
 [tool.codespell]
-    count = ''
-    quiet-level = 2
-    skip = 'documentation/Archive/*'
-    ignore-words-list = 'space-holder'
-    write-changes = ''
+count = ""
+quiet-level = 2
+skip = "working/*"
+ignore-words-list = "space-holder"
+write-changes = ""
 
 [tool.coverage.run]
-    source = [
-        'src',
-        'tests',
-    ]
+source = [
+    "src",
+    "tests"
+]
 
 [tool.isort]
-    profile = "black"
+profile = "black"
+
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+black = ">=25.1.0"
+codecov = ">=2.1.13"
+flake8 = ">=7.1.1"
+isort = ">=5.13.2"
+mdformat-gfm = ">=0.4.1"
+mdformat-frontmatter = ">=2.0.8"
+mdformat-footnote = ">=0.1.1"
+pre-commit = ">=4.0.1"
+pygments = "^2.19.1"
+pytest = ">=8.3.4"
+pytest-cov = ">=6.0.0"
+rstcheck = { extras = [
+    "sphinx",
+], version = ">=6.2.4" }
+sphinx = ">=8.1.3"
+twine = ">=6.1.0"
+
+[[tool.poetry.source]]
+name = "RTE"
+url = "https://github.com/BrightEdgeeServices/PoetryPrivate.git"
+priority = "explicit"
 
 [tool.poetry.dependencies]
 
-[tool.poetry.group.dev]
-    optional = true
-
-[tool.poetry.group.dev.dependencies]
-    black = ">=25.1.0"
-    codecov = ">=2.1.13"
-    flake8 = ">=7.1.1"
-    mdformat-gfm = ">=0.4.1"
-    mdformat-frontmatter = ">=2.0.8"
-    mdformat-footnote = ">=0.1.1"
-    pre-commit = ">=4.0.1"
-    pytest = ">=8.3.4"
-    pytest-cov = ">=6.0.0"
-    rstcheck = { extras = [
-        "sphinx",
-    ], version = ">=6.2.4" }
-    sphinx = ">=8.1.3"
-    twine = ">=6.1.0"
-
-
 [tool.pytest.ini_options]
-    addopts = [
-        '-vv',
-        '--ignore-glob=*\\Archive',
-    ]
-    filterwarnings = [
-        #    "ignore::DeprecationWarning",
-    ]
-    pythonpath = [
-        'src',
-        'tests',
-    ]
-    testpaths = 'tests'
-    markers = [
-        "select: Run a selection of tests",
-    ]
+addopts = [
+    "-vv",
+    "--ignore-glob=*/Archive",
+    "--ignore=/legacy",
+    "--ignore=tests/legacy",
+]
+filterwarnings = [
+#    "ignore::DeprecationWarning",
+]
+pythonpath = [
+    "src",
+    "tests",
+]
+testpaths = "tests"
+markers = [
+    "select: Run a selection of tests",
+]

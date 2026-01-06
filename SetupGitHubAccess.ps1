@@ -57,10 +57,19 @@ if (-not $Pester) {
         {
             $Organization = "hendrikdutoit"
         }
+        elseif ($Organization -eq "RTE")
+        {
+            $Organization = "RealTimeEvents"
+        }
+        elseif ($Organization -eq "URS")
+        {
+            $Organization = "Universal-Rating-System"
+        }
 
         if (-not $RepoName) {
             $RepoName = $env:PROJECT_NAME
         }
+        git config push.autoSetupRemote True
         git remote set-url origin https://$env:GH_REPO_ACCESS_CURR_USER@github.com/$Organization/$RepoName
     }
     Write-Host '-[ END SetupGitHubAccess.ps1 ]--------------------------------------------------' -ForegroundColor Cyan

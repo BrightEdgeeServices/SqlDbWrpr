@@ -1,0 +1,24 @@
+# py-pc-build-pvtpy-temp-publish-pvt-build_release_notify_after_merge-def-def.yaml
+# This template triggers a reusable workflow that creates a release and sends a notice
+# after a Pull Request is merged into master. The release tag is derived from
+# pyproject.toml's [project].version (or [tool.poetry].version as fallback), prefixed with 'v'.
+name: Release After Merge
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - master
+
+jobs:
+  Release-After-Merge:
+    if: ${{ github.event.pull_request.merged == true }}
+    permissions:
+      contents: write
+    uses: BrightEdgeeServices/devops-automation/.github/workflows/py-wf-publish-pub-build_release_notify_after_merge-def.yaml@master
+    secrets:
+      # GH_REPO_ACCESS_BEE_MASTER: ${{secrets.GH_REPO_ACCESS_BEE_MASTER }}
+      # GH_REPO_ACCESS_RTE_MASTER: ${{secrets.GH_REPO_ACCESS_RTE_MASTER }}
+      PYPI_API_TOKEN_PROD: ${{secrets.PYPI_API_TOKEN_PROD }}
+      RELEASE_EMAIL_USER:     ${{vars.RELEASE_EMAIL_USER }}
+      RELEASE_EMAIL_PASSWORD: ${{secrets.RELEASE_EMAIL_PASSWORD }}
