@@ -22,7 +22,7 @@ class TestSqlDbWrpr:
             # p_ssl_cert=None,
         )
         sqldb.cur.execute("SHOW DATABASES")
-        dbs = [str(x[0]) for x in sqldb.cur.fetchall()]
+        dbs = [x[0].decode() if isinstance(x[0], (bytearray, bytes)) else str(x[0]) for x in sqldb.cur.fetchall()]
         assert get_settings.MYSQL_DATABASE in dbs
         pass
 

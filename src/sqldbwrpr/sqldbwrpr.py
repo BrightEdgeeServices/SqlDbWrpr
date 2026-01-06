@@ -102,7 +102,7 @@ class SQLDbWrpr:
     def create_db(self):
         """Create the database according to self.db_structure."""
         self.cur.execute("SHOW DATABASES")
-        db_res = [str(x[0]) for x in self.cur.fetchall()]
+        db_res = [x[0].decode() if isinstance(x[0], (bytearray, bytes)) else str(x[0]) for x in self.cur.fetchall()]
         # if self.db_name.lower() in db_res:
         if self.db_name in db_res:
             try:

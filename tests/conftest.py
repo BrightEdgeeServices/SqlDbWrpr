@@ -443,6 +443,7 @@ db_structure = {
 
 
 class Settings(BaseSettings):
+    model_config = {"env_file": ".env", "extra": "ignore"}
     INSTALLER_USERID: str = ""
     INSTALLER_PWD: str = ""
     MYSQL_HOST: str = ""
