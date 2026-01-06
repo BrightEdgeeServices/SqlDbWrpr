@@ -1,3 +1,25 @@
+# Release 5.0.1
+
+### Changed
+
+- Updated `coverage.xml`.
+
+### Removed
+
+- Discontinued GitHub workflow: `.github/workflows/python-template-pypi-public-with-docker.yaml`.
+
+### Statistics
+
+- **Changed files:** 2
+- **Insertions:** 1
+- **Deletions:** 23
+- **Branch:** hendrik/urs-314-feature-sqldbwrpr-remove-discontinued-workflow
+- **Files changed:**
+  - .github/workflows/python-template-pypi-public-with-docker.yaml
+  - coverage.xml
+
+______________________________________________________________________
+
 # Release 5.0.0
 
 ### Added
