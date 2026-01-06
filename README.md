@@ -9,6 +9,59 @@
 
 ## Overview
 
+SqlDbWrpr is a Python-based utility designed to simplify interactions with SQL databases, specifically MySQL and MSSQL. It provides a high-level abstraction for common database operations, making it easier to manage database schemas, import/export data, and handle user permissions.
+
+### Key Features
+
+- **Schema Management**: Define your database structure (tables, fields, types, primary keys, foreign keys, and indexes) using a simple Python dictionary. SqlDbWrpr handles the creation of the database and tables based on this definition.
+- **Data Import/Export**:
+  - Effortlessly import data from CSV files into your SQL tables. It supports both single and multi-volume CSV files and handles data type conversions and date formatting.
+  - Export table data or custom SQL query results back to CSV files, with options for multi-volume exports if the data size is large.
+- **User and Permission Management**: Create and delete database users and grant them specific rights across the database.
+- **SSL Support**: Secure your database connections with built-in support for SSL CA, key, and certificate files.
+- **Batch Processing**: Optimize performance during data imports with configurable batch sizes.
+- **Multi-Database Support**: Includes dedicated classes for MySQL and MSSQL, ensuring compatibility across different SQL environments.
+
+### Installation
+
+```bash
+pip install SqlDbWrpr
+```
+
+### Quick Start
+
+```python
+from sqldbwrpr.sqldbwrpr import MySQL
+
+# Define your database structure
+db_structure = {
+    "Users": {
+        "ID": {
+            "Type": ["int"],
+            "Params": {"PrimaryKey": ["Y", "A"], "NN": "Y", "AI": "Y"},
+        },
+        "Username": {"Type": ["varchar", 50], "Params": {"NN": "Y"}},
+        "Email": {"Type": ["varchar", 100], "Params": {"NN": "Y"}},
+    }
+}
+
+# Initialize the wrapper
+db = MySQL(
+    p_host_name="localhost",
+    p_user_name="root",
+    p_password="yourpassword",
+    p_db_name="my_database",
+    p_db_structure=db_structure,
+    p_recreate_db=True,
+)
+
+# Import data from CSV
+db.import_csv("Users", "users_data.csv")
+
+# Export data to CSV
+db.export_to_csv("exported_users.csv", "Users")
+```
+
 [cicd_codestyle_img]: https://img.shields.io/badge/code%20style-black-000000.svg "Black"
 [cicd_codestyle_lnk]: https://github.com/psf/black "Black"
 [cicd_pre_commit_img]: https://img.shields.io/github/actions/workflow/status/BrightEdgeeServices/SqlDbWrpr/pre-commit.yml?label=pre-commit "Pre-Commit"
