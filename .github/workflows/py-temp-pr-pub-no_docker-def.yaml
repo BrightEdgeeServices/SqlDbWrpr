@@ -21,8 +21,6 @@ jobs:
     if: ${{ github.ref_type != 'tag' }}
     uses: BrightEdgeeServices/devops-automation/.github/workflows/py-wf-pr-pub-no_docker-def.yaml@master
     secrets:
-      AUTHZ_CACHE_TTL_SEC:       ${{vars.AUTHZ_CACHE_TTL_SEC}}
-      AUTHZ_HOST:                ${{vars.AUTHZ_HOST}}
       GH_REPO_ACCESS_BEE_MASTER: ${{secrets.GH_REPO_ACCESS_BEE_MASTER }}
       GH_REPO_ACCESS_RTE_MASTER: ${{secrets.GH_REPO_ACCESS_RTE_MASTER }}
       INSTALLER_USERID:          ${{vars.INSTALLER_USERID }}
