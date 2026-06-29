@@ -4,7 +4,28 @@ version: 2
 updates:
   # Configure check for outdated GitHub Actions in workflows.
   # See: https://docs.github.com/code-security/dependabot/working-with-dependabot/keeping-your-actions-up-to-date-with-dependabot
-  - package-ecosystem: github-actions
-    directory: / # Check the repository's workflows under /.github/workflows/
+  # For Poetry dependencies
+  - package-ecosystem: "pip"
+    directory: "/"                     # Location of pyproject.toml
     schedule:
-      interval: weekly
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      include: "scope"
+
+  # For GitHub Actions workflows (keep this if you use Actions)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      include: "scope"
+
+  # Enable version updates for Docker
+  - package-ecosystem: "docker"
+    # Look for a `Dockerfile` in the `root` directory
+    directory: "/"
+    # Check for updates once a week
+    schedule:
+      interval: "weekly"

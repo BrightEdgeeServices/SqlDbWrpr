@@ -1,8 +1,8 @@
-"""Wrapper for importing CSV and Text files into MySQL and Postgresql.
+"""Database wrapper utilities for MySQL and PostgreSQL.
 
-Only the MySQL implementation is working.  The MSSQL ODBC implementation
-is giving me a lot of shit with the connection and I gave up for now to
-get it working.
+SqlDbWrpr creates databases and tables from either the legacy dictionary
+structure or SQLAlchemy metadata, then imports and exports CSV data through a
+small DB-API based wrapper.
 """
 
 import datetime
@@ -14,9 +14,8 @@ import csvwrpr
 import displayfx
 import fixdate
 import mysql.connector
-import pyodbc
+import psycopg
 from beetools import msg as bm
-from mysql.connector import Error
 from mysql.connector import errorcode
 
 # from pathlib import Path
@@ -27,8 +26,12 @@ from mysql.connector import errorcode
 # _PROJ_NAME = _PROJ_PATH.stem
 
 
+class SchemaSourceError(ValueError):
+    """Raised when no supported database schema source is supplied."""
+
+
 class SQLDbWrpr:
-    """This module creates a wrapper for the MySql database."""
+    """Base wrapper for schema creation and CSV import/export operations."""
 
     def __init__(
         self,
@@ -38,6 +41,8 @@ class SQLDbWrpr:
         p_recreate_db=False,
         p_db_name="",
         p_db_structure=None,
+        p_sqlalchemy_base=None,
+        p_sqlalchemy_metadata=None,
         p_batch_size=10000,
         p_bar_len=50,
         p_msg_width=50,
@@ -47,18 +52,25 @@ class SQLDbWrpr:
         p_ssl_key=None,
         p_ssl_cert=None,
     ):
-        """Create database with supplied structure and return a connector to the database
+        """Initialize common wrapper state and resolve the database schema.
+
+        A legacy `p_db_structure` dictionary takes precedence. If it is not
+        supplied, SQLAlchemy metadata is read from `p_sqlalchemy_metadata` or
+        from `p_sqlalchemy_base.metadata`. A `SchemaSourceError` is raised when
+        none of those schema sources are available.
 
         Parameters
-        - p_host_name = Host to connect to
-        - p_user_name = User name for connection
-        - p_password = paswword of user
-        - ReCreate = Recresate the database or connect to existing database
-        - db_name =
-        - table_details: Details of the tables to be created
-        - batch_size:    Bulk data will be managed by batch_size to commit
-        - p_bar_len:     Length for the progress bar
-        - p_msg_width:   Width of message before progress bar
+        - p_host_name: Host to connect to.
+        - p_user_name: User name for the connection.
+        - p_password: Password for the connection.
+        - p_recreate_db: Recreate the database when the backend supports it.
+        - p_db_name: Database name.
+        - p_db_structure: Legacy SqlDbWrpr table/field dictionary.
+        - p_sqlalchemy_base: Declarative base that exposes SQLAlchemy metadata.
+        - p_sqlalchemy_metadata: SQLAlchemy MetaData instance.
+        - p_batch_size: Number of rows committed per import batch.
+        - p_bar_len: Length of progress bars.
+        - p_msg_width: Width of progress messages.
         """
         self.logger_name = __name__
         self.logger = logging.getLogger(self.logger_name)
@@ -70,10 +82,12 @@ class SQLDbWrpr:
         self.conn = None
         self.cur = None
         self.db_name = p_db_name
-        if p_db_structure:
-            self.db_structure = p_db_structure
-        else:
-            self.db_structure = {}
+        self.db_structure = self.resolve_db_structure(
+            p_db_structure=p_db_structure,
+            p_sqlalchemy_base=p_sqlalchemy_base,
+            p_sqlalchemy_metadata=p_sqlalchemy_metadata,
+        )
+        self.db_error = mysql.connector.Error
         self.delimiter = ","
         self.fkey_ref_act = {
             "C": "CASCADE",
@@ -82,7 +96,9 @@ class SQLDbWrpr:
             "N": "SET NULL",
         }
         self.host_name = p_host_name
+        self.identifier_quote = ""
         self.idx_type = {"U": "UNIQUE", "F": "FULLTEXT", "S": "SPATIAL"}
+        self.inline_indexes = True
         self.msg_width = p_msg_width
         self.non_char_fields = {}
         self._password = p_password
@@ -95,9 +111,74 @@ class SQLDbWrpr:
         self.db_port = p_db_port
 
     def close(self):
-        """Close the connention"""
+        """Close the active database connection."""
         if self.conn:
             self.conn.close()
+
+    def build_column_sql(self, p_field_name, p_field_type, p_field_params, p_field_comment):
+        """Build SQL for one column in a CREATE TABLE statement."""
+        sql_str = f"{self.quote_identifier(p_field_name)} {self.render_field_type(p_field_type, p_field_params)}"
+        if p_field_params["AI"] == "Y":
+            sql_str += " AUTO_INCREMENT"
+        if p_field_params["UN"] == "Y" and p_field_params["AI"] != "Y":
+            sql_str += " UNSIGNED"
+        if p_field_params["NN"] == "Y":
+            sql_str += " NOT NULL"
+        if p_field_params["ZF"] == "Y":
+            sql_str += " ZEROFILL"
+        if p_field_params["DEF"]:
+            sql_str += self.render_default_sql(p_field_type, p_field_params["DEF"])
+        if p_field_comment:
+            sql_str += f' COMMENT "{p_field_comment}"'
+        return sql_str
+
+    def build_index_sql(self, p_table_name, p_idx_name, p_idx_fields, p_unique=False):
+        """Build an index clause for the active SQL dialect."""
+        idx_type = "UNIQUE INDEX" if p_unique else "INDEX"
+        index_fields = []
+        for field_det in p_idx_fields:
+            index_fields.append(f"{self.quote_identifier(field_det[0])} {self.sort_order[field_det[2]]}")
+        return f"{idx_type} {self.quote_identifier(p_idx_name)} ({','.join(index_fields)}) VISIBLE, "
+
+    def build_insert_sql(self, p_table_name, p_header, p_replace=False):
+        """Build SQL for inserting rows into a table."""
+        insert_command = "REPLACE" if p_replace else "INSERT"
+        return "{} INTO {} ({}) VALUES ({})".format(
+            insert_command,
+            self.quote_identifier(p_table_name),
+            ",".join([self.quote_identifier(str(x)) for x in p_header]),
+            ",".join([self.param_placeholder() for x in range(len(p_header))]),
+        )
+
+    def param_placeholder(self):
+        """Return the DB-API placeholder used by this backend."""
+        return "%s"
+
+    def quote_identifier(self, p_identifier):
+        """Quote an SQL identifier for this backend."""
+        if not self.identifier_quote:
+            return str(p_identifier)
+        escaped_identifier = str(p_identifier).replace(self.identifier_quote, self.identifier_quote * 2)
+        return f"{self.identifier_quote}{escaped_identifier}{self.identifier_quote}"
+
+    def quote_identifier_list(self, p_identifiers):
+        """Quote and join SQL identifiers."""
+        return ",".join([self.quote_identifier(p_identifier) for p_identifier in p_identifiers])
+
+    def render_default_sql(self, p_field_type, p_default_value):
+        """Render a column default expression."""
+        if p_field_type[0] == "varchar" or p_field_type[0] == "char":
+            return f' DEFAULT "{p_default_value}"'
+        return f" DEFAULT {p_default_value}"
+
+    def render_field_type(self, p_field_type, p_field_params):
+        """Render a field type for this backend."""
+        field_type = p_field_type[0]
+        if field_type == "varchar" or field_type == "char":
+            return f"{field_type} ({str(p_field_type[1])})"
+        if field_type == "decimal":
+            return f"{field_type}({str(p_field_type[1])}, {str(p_field_type[2])})"
+        return field_type
 
     def create_db(self):
         """Create the database according to self.db_structure."""
@@ -108,7 +189,7 @@ class SQLDbWrpr:
             try:
                 self.cur.execute(f"DROP DATABASE {self.db_name}")
                 self.conn.commit()
-            except mysql.connector.Error as err:
+            except self.db_error as err:
                 self._print_err_msg(err, "Could not drop the database")
                 self.close()
                 sys.exit()
@@ -117,23 +198,23 @@ class SQLDbWrpr:
             self.conn.commit()
             self.cur.execute(f"USE {self.db_name}")
             self.conn.commit()
-        except mysql.connector.Error as err:
+        except self.db_error as err:
             self._print_err_msg(err, "Could not create the database")
             self.close()
             sys.exit()
         return True
 
     def create_tables(self):
-        """Create db tables from MySQL.table_details dict"""
+        """Create database tables, indexes, and constraints from the resolved schema."""
 
         def build_db(p_db_sql_str_set):
-            """Description"""
+            """Execute the generated table or index SQL statements."""
             for sql_set in p_db_sql_str_set:
                 try:
                     self.cur.execute(sql_set[1])
                     if self.silent:
                         print(f"Created table = {sql_set[0]}")
-                except mysql.connector.Error as err:
+                except self.db_error as err:
                     print(f"Failed creating table = {sql_set[0]}: {err}\nForced termination of program")
                     print(f"{sql_set[1]}")
                     sys.exit()
@@ -147,7 +228,7 @@ class SQLDbWrpr:
             p_idx_set_up_list,
             p_constraint_set_up_list,
         ):
-            """Description"""
+            """Combine column, primary-key, index, and constraint SQL."""
             table_set_up_str = p_table_set_up_str
             table_set_up_str += p_primary_key_str
             for idx_str in p_idx_set_up_list:
@@ -161,7 +242,7 @@ class SQLDbWrpr:
 
         def build_constraints(p_table_name):
             # noinspection PySingleQuotedDocstring
-            """Description"""
+            """Build foreign-key constraint SQL for one table."""
             constraint_list = []
             fkey_nr_list = []
             for field_name in self.db_structure[p_table_name]:
@@ -173,9 +254,9 @@ class SQLDbWrpr:
                         "CONSTRAINT fk_{}_{} FOREIGN KEY ({}) REFERENCES {} ({}) ON DELETE {} ON UPDATE {}, ".format(
                             fkey["FKeyTable"],
                             fkey["RefTable"],
-                            ".".join(fkey["FKeyFlds"]),
-                            fkey["RefTable"],
-                            ".".join(fkey["RefFields"]),
+                            self.quote_identifier_list(fkey["FKeyFlds"]),
+                            self.quote_identifier(fkey["RefTable"]),
+                            self.quote_identifier_list(fkey["RefFields"]),
                             self.fkey_ref_act[fkey["OnDelete"]],
                             self.fkey_ref_act[fkey["OnUpdate"]],
                         )
@@ -187,10 +268,10 @@ class SQLDbWrpr:
         # def build_constraints
 
         def build_all_indexes(p_table_name):
-            """Description"""
+            """Build inline or post-create index SQL for one table."""
 
             # def build_primary_key_idx(p_table_name):
-            #     '''Description'''
+            #     '''Build primary-key index SQL.'''
             #     idx_name_list = []
             #     idx_str_list = []
             #     pkey = get_primary_key(p_table_name)
@@ -205,7 +286,7 @@ class SQLDbWrpr:
             # # end build_primary_key_idx
 
             def build_unique_key_idx(p_table_name, p_dx_name_list, p_idx_str_list):
-                """Description"""
+                """Build grouped index definitions from legacy field metadata."""
                 idx_list = {}
                 idx_name_list = p_dx_name_list
                 idx_str_list = p_idx_str_list
@@ -229,14 +310,16 @@ class SQLDbWrpr:
                         idx_name = f"idx_{idx_name[:-1]}"
                     if idx_name not in idx_name_list:
                         idx_name_list.append(idx_name)
-                        if field_det[3] == "U":
-                            idx_str = f"{self.idx_type[field_det[3]]} INDEX {idx_name} ("
+                        idx_str = self.build_index_sql(
+                            p_table_name,
+                            idx_name,
+                            idx_instance_order,
+                            field_det[3] == "U",
+                        )
+                        if self.inline_indexes:
+                            idx_str_list.append(idx_str)
                         else:
-                            idx_str = f"INDEX {idx_name} ("
-                        for field_det in idx_instance_order:
-                            idx_str += f"{field_det[0]} {self.sort_order[field_det[2]]}, "
-                        idx_str = idx_str[:-2] + ") VISIBLE, "
-                        idx_str_list.append(idx_str)
+                            post_create_sql_set.append([idx_name, idx_str])
                 return idx_str_list, idx_name_list
 
             # end build_unique_key_idx
@@ -249,47 +332,33 @@ class SQLDbWrpr:
         # def build_all_indexes
 
         def build_primary_key_sql_str(p_table_name):
-            """Description"""
+            """Build the primary-key clause for one table."""
             primary_key_det = get_primary_key(p_table_name)
-            sql_str = "PRIMARY KEY ({}), ".format(",".join(primary_key_det["Flds"]))
+            sql_str = "PRIMARY KEY ({}), ".format(self.quote_identifier_list(primary_key_det["Flds"]))
             return sql_str
 
         # def build_primary_key_sql_str
 
         def build_table_sql_str(p_table_name):
-            """Description"""
-            sql_str = f"CREATE TABLE {p_table_name} ("
+            """Build the CREATE TABLE prefix and column definitions."""
+            sql_str = f"CREATE TABLE {self.quote_identifier(p_table_name)} ("
             for field_name in self.db_structure[p_table_name]:
                 field_type_st_ref = self.db_structure[p_table_name][field_name]["Type"]
                 field_param_st_ref = self.db_structure[p_table_name][field_name]["Params"]
                 field_comment_st_ref = self.db_structure[p_table_name][field_name]["Comment"]
-                sql_str += f"{field_name} {field_type_st_ref[0]}"
-                if field_type_st_ref[0] == "varchar" or field_type_st_ref[0] == "char":
-                    sql_str += f" ({str(field_type_st_ref[1])})"
-                elif field_type_st_ref[0] == "decimal":
-                    sql_str += f"({str(field_type_st_ref[1])}, {str(field_type_st_ref[2])})"
-                if field_param_st_ref["AI"] == "Y":
-                    sql_str += " AUTO_INCREMENT"
-                if field_param_st_ref["UN"] == "Y" and field_param_st_ref["AI"] != "Y":
-                    sql_str += " UNSIGNED"
-                if field_param_st_ref["NN"] == "Y":
-                    sql_str += " NOT NULL"
-                if field_param_st_ref["ZF"] == "Y":
-                    sql_str += " ZEROFILL"
-                if field_param_st_ref["DEF"]:
-                    if field_type_st_ref[0] == "varchar" or field_type_st_ref[0] == "char":
-                        sql_str += ' DEFAULT "{}"'.format(field_param_st_ref["DEF"])
-                    else:
-                        sql_str += " DEFAULT {}".format(field_param_st_ref["DEF"])
-                if field_comment_st_ref:
-                    sql_str += f' COMMENT "{field_comment_st_ref}"'
+                sql_str += self.build_column_sql(
+                    field_name,
+                    field_type_st_ref,
+                    field_param_st_ref,
+                    field_comment_st_ref,
+                )
                 sql_str += ", "
             return sql_str
 
         # end build_table_sql_str
 
         def get_foreign_key(p_table_name, p_field_name):
-            """Description"""
+            """Return normalized foreign-key metadata for a field."""
             fkey = {
                 "Present": False,
                 "FKeyFlds": [],
@@ -327,7 +396,7 @@ class SQLDbWrpr:
         # end get_foreign_key
 
         def get_primary_key(p_table_name):
-            """Description"""
+            """Return normalized primary-key metadata for a table."""
             pkey = {"Present": False, "Flds": (), "SortPairList": [], "SortPairStr": []}
             for field_name in self.db_structure[p_table_name]:
                 pkey_field_det = self.db_structure[p_table_name][field_name]
@@ -351,7 +420,7 @@ class SQLDbWrpr:
         # end get_primary_key
 
         def order_table_build_list(p_db_sql_str_set, p_constraint_set_up_list):
-            """Description"""
+            """Order table creation so referenced tables are created first."""
             db_sql_str_set = p_db_sql_str_set
             ordered = False
             while not ordered:
@@ -385,13 +454,13 @@ class SQLDbWrpr:
         # end order_table_build_list
 
         def structure_validation():
-            """Description"""
+            """Validate schema relationships before SQL generation."""
 
             def check_pkey_fkey_overlap(p_remove_fkey_pkey__overlap=True):
-                """Description"""
+                """Detect and optionally remove primary-key/foreign-key overlap."""
 
                 def partial_overlap(p_fkey, p_pkey):
-                    """Description"""
+                    """Return whether a foreign key partially overlaps a primary key."""
                     is_overlap = False
                     for field_name in p_fkey["FKeyFlds"]:
                         if field_name in p_pkey["Flds"]:
@@ -401,7 +470,7 @@ class SQLDbWrpr:
                 # end partial_overlap
 
                 def remove_fkey(p_fkey):
-                    """Description"""
+                    """Remove a foreign-key definition from all participating fields."""
                     for field_name in self.db_structure[p_fkey["FKeyTable"]]:
                         if self.db_structure[p_fkey["FKeyTable"]][field_name]["Params"]["FKey"]:
                             if (
@@ -448,6 +517,7 @@ class SQLDbWrpr:
         # end structure_validation()
 
         success = True
+        post_create_sql_set = []
         structure_validation()
         table_set_up_list = ""
         idx_set_up_list = []
@@ -474,9 +544,11 @@ class SQLDbWrpr:
             pass
         db_sql_str_set = order_table_build_list(db_sql_str_set, constraint_set_up_list)
         build_db(db_sql_str_set)
+        build_db(post_create_sql_set)
         return success
 
     def create_users(self, p_admin_user, p_new_users):
+        """Create MySQL users that do not already exist."""
         c_user_name = 0
         self.cur.execute("SELECT User, Host FROM mysql.user")
         curr_users = self.cur.fetchall()
@@ -488,7 +560,7 @@ class SQLDbWrpr:
                             user[0], self.host_name, user[1]
                         )
                     )
-                except mysql.connector.Error as err:
+                except self.db_error as err:
                     self._print_err_msg(err, "Could not create user")
                     self.close()
                     sys.exit()
@@ -505,7 +577,7 @@ class SQLDbWrpr:
             if user[c_user_name] in curr_users:
                 try:
                     self.cur.execute(f"DROP USER '{user[c_user_name]}'@'{user[c_host]}'")
-                except mysql.connector.Error as err:
+                except self.db_error as err:
                     self._print_err_msg(err, "Could not delete user")
                     self.close()
                     sys.exit()
@@ -558,12 +630,13 @@ class SQLDbWrpr:
             file_name_list = []
             header = p_delimeter.join(self.db_structure[p_table_name])
             prim_key_sql_str = "SELECT "
-            all_sql_str = "SELECT " + header.replace(p_delimeter, ",") + " FROM " + p_table_name + " WHERE "
+            select_header = self.quote_identifier_list(self.db_structure[p_table_name])
+            all_sql_str = "SELECT " + select_header + " FROM " + self.quote_identifier(p_table_name) + " WHERE "
             for i, field in enumerate(self.db_structure[p_table_name]):
                 if self.db_structure[p_table_name][field]["Params"]["PrimaryKey"][0] == "Y":
-                    prim_key_sql_str += field + ", "
-                    all_sql_str += field + " = %s and "
-            prim_key_sql_str = prim_key_sql_str[:-2] + " FROM " + p_table_name
+                    prim_key_sql_str += self.quote_identifier(field) + ", "
+                    all_sql_str += self.quote_identifier(field) + " = " + self.param_placeholder() + " and "
+            prim_key_sql_str = prim_key_sql_str[:-2] + " FROM " + self.quote_identifier(p_table_name)
             all_sql_str = all_sql_str[:-5]
             print(f"Collecting {p_table_name} table records")
             self.cur.execute(prim_key_sql_str)
@@ -626,7 +699,12 @@ class SQLDbWrpr:
             file_name_list.append(os.path.split(p_csv_path))
             if not p_sql_query:
                 header = p_delimeter.join(self.db_structure[p_table_name])
-                sql_str = "SELECT " + header.replace(p_delimeter, ",") + " FROM " + p_table_name
+                sql_str = (
+                    "SELECT "
+                    + self.quote_identifier_list(self.db_structure[p_table_name])
+                    + " FROM "
+                    + self.quote_identifier(p_table_name)
+                )
             else:
                 header = p_delimeter.join(p_sql_query[0])
                 sql_str = p_sql_query[1]
@@ -663,8 +741,8 @@ class SQLDbWrpr:
 
         file_name_list = None
         try:
-            self.cur.execute("SELECT COUNT(*) FROM " + p_table_name)
-        except mysql.connector.Error as err:
+            self.cur.execute("SELECT COUNT(*) FROM " + self.quote_identifier(p_table_name))
+        except self.db_error as err:
             print(f"Err mesg: {err.msg}")
             print(err.msg)
         else:
@@ -677,7 +755,7 @@ class SQLDbWrpr:
         return file_name_list
 
     def get_db_field_types(self):
-        """Description"""
+        """Populate field type lookup lists used during import/export."""
         for p_table_name in self.db_structure:
             self.char_fields[p_table_name] = []
             self.non_char_fields[p_table_name] = []
@@ -691,6 +769,7 @@ class SQLDbWrpr:
                     self.non_char_fields[p_table_name].append(field)
 
     def grant_rights(self, p_admin_user, p_user_rights):
+        """Grant configured MySQL rights to users."""
         c_user_name = 0
         # c_password = 1
         c_host = 1
@@ -718,7 +797,7 @@ class SQLDbWrpr:
                 )
                 self.cur.execute(sql_str)
                 self.conn.commit()
-            except mysql.connector.Error as err:
+            except self.db_error as err:
                 self._print_err_msg(err)
                 self.close()
                 sys.exit()
@@ -737,41 +816,40 @@ class SQLDbWrpr:
         p_verbose=False,
         p_replace=False,
     ):
-        """Import a csv file into a database table.
+        """Import CSV rows into a database table.
 
         Parameters
         - p_table_name
-          Table name to import the csv data into
+          Table name to import the CSV data into
         - p_csv_file_name = ''
-          Csv file name.  Empty if structure contained in p_csv_db
+          CSV file name. Empty when rows are supplied in p_csv_db
         - p_key = ''
           Key used to insert in table
         - p_header = ''
-          - Header of csv files
+          - Header of CSV files
         - p_del_head = ''
           - Delete the header
         - p_csv_db = ''
-          - Contains the csv table in a structure and makes p_csv_file_name obsolete.
+          - Contains the CSV rows directly and makes p_csv_file_name obsolete.
         - p_csv_corr_str_file_name = ''
-          - String that contains any strings that should be replace in the csv
-            file before parsing
+          - File containing string replacements to apply before parsing
         - p_vol_type = 'Multi'
           - Multi - Read multiple volume
           - Single - Read single file
         - p_verbose = False
-          - Determine if there are any output to screen
+          - Determine whether progress output is written to screen
         - debug = False
-          - Switch debug on
+          - Switch debug output on
         - p_replace = False
           - False - INSERT into database
           - True - REPLACE into database
         """
 
         def import_volume(p_csv_db, p_header, p_verbose):
-            """Description"""
+            """Prepare and write one in-memory CSV volume to the active table."""
 
             def convert_str_to_none(p_non_char_fields_idx, p_csv_db):
-                """Description"""
+                """Convert blank non-character values to None before insert."""
                 rows_to_del = []
                 csv_db = p_csv_db
                 list_len = len(csv_db)
@@ -813,7 +891,7 @@ class SQLDbWrpr:
             # end convert_str_to_none
 
             def find_non_char_field_idx(p_csv_db):
-                """Find the index of the fields that could potentially contain mepty strings."""
+                """Find non-character field indexes that may contain empty strings."""
                 non_char_fields_idx = []
                 for header_field_name in self.non_char_fields[p_table_name]:
                     for row_idx, data_field_name in enumerate(p_csv_db[0]):
@@ -825,7 +903,7 @@ class SQLDbWrpr:
             # end find_non_char_field_idx
 
             def fix_dates(p_csv_db, p_table_name, p_header):
-                """Ensure date and datetime fields in the database is valid."""
+                """Normalize date and datetime values before insert."""
                 c_field_idx = 0
                 c_field_type = 1
                 csv_db = p_csv_db
@@ -879,7 +957,7 @@ class SQLDbWrpr:
             # end fix_dates
 
             def write_to_table(p_csv_db):
-                """Write the data to a table"""
+                """Write prepared rows to the destination table."""
                 i = 1
                 j = 0  # In case batch size is more than all records
                 list_len = len(p_csv_db)
@@ -893,21 +971,11 @@ class SQLDbWrpr:
                     p_verbose=p_verbose,
                     p_bar_len=self.bar_len,
                 )
-                # sql_str = 'REPLACE'
-                if p_replace:
-                    sql_str = "REPLACE"
-                else:
-                    sql_str = "INSERT"
-                sql_str = "{} INTO {} ({}) VALUES ({})".format(
-                    sql_str,
-                    p_table_name,
-                    ",".join([str(x) for x in header]),
-                    ",".join(["%s" for x in range(len(header))]),
-                )
+                sql_str = self.build_insert_sql(p_table_name, header, p_replace=p_replace)
                 for j in range(self.batch_size, list_len, self.batch_size):
                     try:
                         self.cur.executemany(sql_str, p_csv_db[i : j + 1])
-                    except Error as err:
+                    except self.db_error as err:
                         self.logger.error(err)
                         self.conn.rollback()
                         self._err_broken_rec(sql_str, p_csv_db[i : j + 1])
@@ -939,7 +1007,7 @@ class SQLDbWrpr:
         # end import_volume
 
         def import_single_volume(p_csv_db, p_header, p_verbose):
-            """Description"""
+            """Import one supplied in-memory CSV volume."""
             success = False
             # if not p_csv_db:
             #     if os.path.isfile(p_csv_file_name):
@@ -965,7 +1033,7 @@ class SQLDbWrpr:
         # end import_single_volume
 
         def import_multi_volume(p_verbose, p_header):
-            """Description"""
+            """Import numbered CSV files until the next volume is missing."""
             vol_cntr = 1
             success = False
             vol_csv_file_name = p_csv_file_name
@@ -1018,7 +1086,7 @@ class SQLDbWrpr:
         p_verbose=False,
         p_debug=False,
     ):
-        """Import a csv file into a database table.
+        """Split CSV rows into one or more destination table imports.
 
         Parameters
         - p_split_struct - { 'Seq01': { 'TableName': Desttable_name1, 'Key': TableKey, 'Replace': False, 'Flds': [[ OrgField1, DestField1, [ Command, Parm1, Parm2, Parm3 ]],
@@ -1036,8 +1104,8 @@ class SQLDbWrpr:
           - Replace (boolean):   Either use REPLACE or INSERT SQL statement to add records to the table.  INSERT will cause
                                  a failure when the record to be added is a duplicate.
           - Fields (str):        Mandatory key word (in the python dict structure) to list the fields in the table
-          - OrgFieldN (str):     Field name from the csv file top copy to the database table
-          - DestFieldN (str):    Destination filed where OrgFieldN will be copied into
+          - OrgFieldN (str):     Field name from the CSV file to copy to the database table
+          - DestFieldN (str):    Destination field where OrgFieldN will be copied into
           - Command (int):       0 = Copy OrgFieldN to DestFieldN as is
                                      Parm1 = Truncate OrgFieldN at Parm1 if it is a string and insert into DestFieldN.  0 for no truncation.  Non 'str' will not be truncated
                                      Parm2 = True if you do not want to add the row if the result is empty, else False
@@ -1181,8 +1249,158 @@ class SQLDbWrpr:
                 p_replace=p_split_struct[seq]["Replace"],
             )
 
+    @classmethod
+    def from_sqlalchemy_metadata(cls, p_sqlalchemy_metadata):
+        """Convert SQLAlchemy metadata into the legacy SqlDbWrpr schema structure."""
+        if not getattr(p_sqlalchemy_metadata, "tables", None):
+            raise SchemaSourceError("SQLAlchemy metadata does not define any tables")
+        db_structure = {}
+        for table in p_sqlalchemy_metadata.sorted_tables:
+            db_structure[table.name] = cls._table_to_legacy_structure(table)
+        return db_structure
+
+    @staticmethod
+    def resolve_db_structure(p_db_structure=None, p_sqlalchemy_base=None, p_sqlalchemy_metadata=None):
+        """Resolve schema from explicit config, SQLAlchemy metadata, or declarative base."""
+        if p_db_structure:
+            return p_db_structure
+        if p_sqlalchemy_metadata is None and p_sqlalchemy_base is not None:
+            p_sqlalchemy_metadata = getattr(p_sqlalchemy_base, "metadata", None)
+        if p_sqlalchemy_metadata is not None:
+            return SQLDbWrpr.from_sqlalchemy_metadata(p_sqlalchemy_metadata)
+        raise SchemaSourceError("Supply p_db_structure, p_sqlalchemy_metadata, or p_sqlalchemy_base")
+
+    @staticmethod
+    def _action_to_legacy_code(p_action):
+        """Convert SQLAlchemy foreign-key actions to legacy codes."""
+        if p_action is None:
+            return "N"
+        action = p_action.upper().replace(" ", "_")
+        action_map = {
+            "CASCADE": "C",
+            "RESTRICT": "R",
+            "SET_DEFAULT": "D",
+            "SET_NULL": "N",
+        }
+        return action_map[action]
+
+    @staticmethod
+    def _build_default_field_params():
+        """Build the legacy default parameter block for a field."""
+        return {
+            "PrimaryKey": ["", ""],
+            "FKey": [],
+            "Index": [],
+            "NN": "",
+            "B": "",
+            "UN": "",
+            "ZF": "",
+            "AI": "",
+            "G": "",
+            "DEF": "",
+        }
+
+    @staticmethod
+    def _column_type_to_legacy(p_column):
+        """Convert a SQLAlchemy column type to the legacy type list."""
+        column_type = p_column.type
+        type_name = column_type.__class__.__name__.lower()
+        if "biginteger" in type_name:
+            return ["bigint"]
+        if "boolean" in type_name:
+            return ["boolean"]
+        if "char" in type_name or "string" in type_name or "varchar" in type_name:
+            if getattr(column_type, "length", None) is None:
+                return ["varchar"]
+            if type_name == "char":
+                return ["char", column_type.length]
+            return ["varchar", column_type.length]
+        if type_name == "date":
+            return ["date"]
+        if "datetime" in type_name:
+            return ["datetime"]
+        if "integer" in type_name:
+            return ["int"]
+        if "largebinary" in type_name or "blob" in type_name or "binary" in type_name:
+            return ["blob"]
+        if "numeric" in type_name or "decimal" in type_name:
+            precision = getattr(column_type, "precision", None)
+            scale = getattr(column_type, "scale", None)
+            if precision is not None and scale is not None:
+                return ["decimal", precision, scale]
+            return ["decimal"]
+        if type_name == "time":
+            return ["time"]
+        return [type_name]
+
+    @staticmethod
+    def _column_to_legacy_field(p_column):
+        """Convert a SQLAlchemy column to a legacy field definition."""
+        field_type = SQLDbWrpr._column_type_to_legacy(p_column)
+        params = SQLDbWrpr._build_default_field_params()
+        if not p_column.nullable or p_column.primary_key:
+            params["NN"] = "Y"
+        if p_column.autoincrement is True:
+            params["AI"] = "Y"
+        if p_column.default is not None and getattr(p_column.default, "is_scalar", False):
+            params["DEF"] = str(p_column.default.arg)
+        if field_type[0] == "blob":
+            params["B"] = "Y"
+        return {
+            "Type": field_type,
+            "Params": params,
+            "Possible Values": "",
+            "Comment": p_column.comment or "",
+        }
+
+    @staticmethod
+    def _set_foreign_keys(p_table, p_table_structure):
+        """Set legacy foreign-key metadata on converted table fields."""
+        for fkey_nr, constraint in enumerate(p_table.foreign_key_constraints, start=1):
+            elements = list(constraint.elements)
+            for field_order, element in enumerate(elements, start=1):
+                p_table_structure[element.parent.name]["Params"]["FKey"] = [
+                    fkey_nr,
+                    field_order,
+                    element.column.table.name,
+                    element.column.name,
+                    SQLDbWrpr._action_to_legacy_code(constraint.ondelete),
+                    SQLDbWrpr._action_to_legacy_code(constraint.onupdate),
+                ]
+
+    @staticmethod
+    def _set_indexes(p_table, p_table_structure):
+        """Set legacy index metadata on converted table fields."""
+        indexes = sorted(p_table.indexes, key=lambda p_index: p_index.name or "")
+        for idx_nr, index in enumerate(indexes, start=1):
+            for field_order, column in enumerate(index.columns, start=1):
+                p_table_structure[column.name]["Params"]["Index"] = [
+                    idx_nr,
+                    field_order,
+                    "A",
+                    "U" if index.unique else "",
+                ]
+
+    @staticmethod
+    def _set_primary_key(p_table, p_table_structure):
+        """Set legacy primary-key metadata on converted table fields."""
+        for column in p_table.primary_key.columns:
+            p_table_structure[column.name]["Params"]["PrimaryKey"] = ["Y", "A"]
+
+    @staticmethod
+    def _table_to_legacy_structure(p_table):
+        """Convert a SQLAlchemy table to the legacy table structure."""
+        table_structure = {}
+        for column in p_table.columns:
+            table_structure[column.name] = SQLDbWrpr._column_to_legacy_field(column)
+        SQLDbWrpr._set_foreign_keys(p_table, table_structure)
+        SQLDbWrpr._set_indexes(p_table, table_structure)
+        SQLDbWrpr._set_primary_key(p_table, table_structure)
+        return table_structure
+
     @staticmethod
     def _print_err_msg(p_err, p_msg=""):
+        """Print a formatted database error message."""
         msg = p_msg
         if p_msg:
             msg = f"{p_msg}\n"
@@ -1197,7 +1415,7 @@ class SQLDbWrpr:
 
 
 class MySQL(SQLDbWrpr):
-    """This module creates a wrapper for the MySql database."""
+    """Wrapper for MySQL databases."""
 
     def __init__(
         self,
@@ -1208,6 +1426,8 @@ class MySQL(SQLDbWrpr):
         p_recreate_db=False,
         p_db_name=None,
         p_db_structure=None,
+        p_sqlalchemy_base=None,
+        p_sqlalchemy_metadata=None,
         p_batch_size=10000,
         p_bar_len=50,
         p_msg_width=50,
@@ -1220,7 +1440,7 @@ class MySQL(SQLDbWrpr):
         # p_ssl_cert=None
         **kwargs,
     ):
-        """Description"""
+        """Connect to MySQL and optionally recreate or select the target database."""
         super().__init__(
             p_host_name=p_host_name,
             p_user_name=p_user_name,
@@ -1228,6 +1448,8 @@ class MySQL(SQLDbWrpr):
             p_db_name=p_db_name,
             p_recreate_db=p_recreate_db,
             p_db_structure=p_db_structure,
+            p_sqlalchemy_base=p_sqlalchemy_base,
+            p_sqlalchemy_metadata=p_sqlalchemy_metadata,
             p_batch_size=p_batch_size,
             p_bar_len=p_bar_len,
             p_msg_width=p_msg_width,
@@ -1252,7 +1474,7 @@ class MySQL(SQLDbWrpr):
                 **kwargs,
             )
             self.cur = self.conn.cursor()
-        except mysql.connector.Error as err:
+        except self.db_error as err:
             print(
                 bm.error(
                     f"Error {err}:'({self.user_name}'@'{self.host_name}')",
@@ -1270,7 +1492,7 @@ class MySQL(SQLDbWrpr):
                             auth_plugin="mysql_native_password",
                             port=self.db_port,
                         )
-                    except mysql.connector.Error as err:
+                    except self.db_error as err:
                         self._print_err_msg(
                             err,
                             "Admin user name and/or password not supplied or incorrect",
@@ -1311,8 +1533,8 @@ class MySQL(SQLDbWrpr):
         pass
 
 
-class MSSQL(SQLDbWrpr):
-    """This module creates a wrapper for the MySql database."""
+class PostgreSQL(SQLDbWrpr):
+    """Wrapper for PostgreSQL databases."""
 
     def __init__(
         self,
@@ -1322,12 +1544,17 @@ class MSSQL(SQLDbWrpr):
         p_recreate_db=False,
         p_db_name=None,
         p_db_structure=None,
+        p_sqlalchemy_base=None,
+        p_sqlalchemy_metadata=None,
         p_batch_size=10000,
         p_bar_len=50,
         p_msg_width=50,
         p_verbose=False,
+        p_db_port="5432",
+        p_maintenance_db="postgres",
+        **kwargs,
     ):
-        """Description"""
+        """Create a PostgreSQL wrapper and optionally recreate the target database."""
         super().__init__(
             p_host_name=p_host_name,
             p_user_name=p_user_name,
@@ -1335,36 +1562,136 @@ class MSSQL(SQLDbWrpr):
             p_db_name=p_db_name,
             p_recreate_db=p_recreate_db,
             p_db_structure=p_db_structure,
+            p_sqlalchemy_base=p_sqlalchemy_base,
+            p_sqlalchemy_metadata=p_sqlalchemy_metadata,
             p_batch_size=p_batch_size,
             p_bar_len=p_bar_len,
             p_msg_width=p_msg_width,
             p_verbose=p_verbose,
+            p_db_port=p_db_port,
         )
+        self.db_error = psycopg.Error
+        self.identifier_quote = '"'
+        self.inline_indexes = False
+        self.maintenance_db = p_maintenance_db
+        self._connection_kwargs = kwargs
+        connect_db = self.maintenance_db if self.re_create_db else self.db_name
+        self.conn = self._connect(connect_db)
+        self.conn.autocommit = True
+        self.cur = self.conn.cursor()
+        if self.re_create_db:
+            if self.create_db():
+                self.create_tables()
+        self.success = True
+
+    def build_column_sql(self, p_field_name, p_field_type, p_field_params, p_field_comment):
+        """Build PostgreSQL SQL for one column in a CREATE TABLE statement."""
+        sql_str = f"{self.quote_identifier(p_field_name)} {self.render_field_type(p_field_type, p_field_params)}"
+        if p_field_params["NN"] == "Y" and p_field_params["AI"] != "Y":
+            sql_str += " NOT NULL"
+        if p_field_params["DEF"]:
+            sql_str += self.render_default_sql(p_field_type, p_field_params["DEF"])
+        return sql_str
+
+    def build_index_sql(self, p_table_name, p_idx_name, p_idx_fields, p_unique=False):
+        """Build a PostgreSQL CREATE INDEX statement."""
+        unique_sql = "UNIQUE " if p_unique else ""
+        index_fields = []
+        for field_det in p_idx_fields:
+            index_fields.append(f"{self.quote_identifier(field_det[0])} {self.sort_order[field_det[2]]}")
+        return "CREATE {}INDEX {} ON {} ({})".format(
+            unique_sql,
+            self.quote_identifier(p_idx_name),
+            self.quote_identifier(p_table_name),
+            ",".join(index_fields),
+        )
+
+    def build_insert_sql(self, p_table_name, p_header, p_replace=False):
+        """Build a PostgreSQL INSERT or upsert statement."""
+        insert_sql = "INSERT INTO {} ({}) VALUES ({})".format(
+            self.quote_identifier(p_table_name),
+            ",".join([self.quote_identifier(str(x)) for x in p_header]),
+            ",".join([self.param_placeholder() for x in range(len(p_header))]),
+        )
+        if not p_replace:
+            return insert_sql
+        primary_key_fields = [
+            field_name
+            for field_name in self.db_structure[p_table_name]
+            if self.db_structure[p_table_name][field_name]["Params"]["PrimaryKey"][0] == "Y"
+        ]
+        if not primary_key_fields:
+            return f"{insert_sql} ON CONFLICT DO NOTHING"
+        update_fields = [field_name for field_name in p_header if field_name not in primary_key_fields]
+        if not update_fields:
+            return f"{insert_sql} ON CONFLICT ({self.quote_identifier_list(primary_key_fields)}) DO NOTHING"
+        update_sql = ",".join(
+            [
+                f"{self.quote_identifier(field_name)} = EXCLUDED.{self.quote_identifier(field_name)}"
+                for field_name in update_fields
+            ]
+        )
+        return f"{insert_sql} ON CONFLICT ({self.quote_identifier_list(primary_key_fields)}) DO UPDATE SET {update_sql}"
+
+    def create_db(self):
+        """Create the PostgreSQL database according to self.db_structure."""
+        self.cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (self.db_name,))
+        if self.cur.fetchone():
+            try:
+                self.cur.execute(f"DROP DATABASE {self.quote_identifier(self.db_name)} WITH (FORCE)")
+            except self.db_error as err:
+                self._print_err_msg(err, "Could not drop the database")
+                self.close()
+                sys.exit()
         try:
-            self.host_name = "156.38.224.15,1433"
-            self.user_name = "chessaco_chessanew"
-            self._password = "@Jv&F77%"
-            self.db_name = "chessaco_analytics"
-            self.driver = "{ODBC Driver 17 for SQL Server}"
-            # driver = pyodbc.drivers()
-            # con_str_1 = 'DRIVER={};SERVER={};DATABASE={};UID={};PWD={}'.format( self.driver, self.host_name, self.db_name, self.user_name, self._password )
-            con_str_2 = (
-                "DRIVER={ODBC Driver 17 for SQL Server};SERVER="
-                + self.host_name
-                + ";DATABASE="
-                + self.db_name
-                + ";UID="
-                + self.user_name
-                + ";PWD="
-                + self._password
-            )
-            self.conn = pyodbc.connect(con_str_2)
-            pass
-        except Error as err:
-            self.logger.error(err)
-        self.success = self.conn.is_connected()
-        if self.conn.is_connected():
+            self.cur.execute(f"CREATE DATABASE {self.quote_identifier(self.db_name)}")
+            self.close()
+            self.conn = self._connect(self.db_name)
+            self.conn.autocommit = True
             self.cur = self.conn.cursor()
-            if self.re_create_db:
-                self.create_db()
-                self.success = self.create_tables()
+        except self.db_error as err:
+            self._print_err_msg(err, "Could not create the database")
+            self.close()
+            sys.exit()
+        return True
+
+    def render_default_sql(self, p_field_type, p_default_value):
+        """Render a PostgreSQL column default expression."""
+        if p_field_type[0] == "varchar" or p_field_type[0] == "char":
+            escaped_value = str(p_default_value).replace("'", "''")
+            return f" DEFAULT '{escaped_value}'"
+        return f" DEFAULT {p_default_value}"
+
+    def render_field_type(self, p_field_type, p_field_params):
+        """Render a legacy field type as a PostgreSQL type."""
+        field_type = p_field_type[0]
+        if p_field_params["AI"] == "Y":
+            if field_type == "bigint":
+                return "BIGSERIAL"
+            return "SERIAL"
+        type_map = {
+            "bigint": "BIGINT",
+            "blob": "BYTEA",
+            "boolean": "BOOLEAN",
+            "date": "DATE",
+            "datetime": "TIMESTAMP",
+            "int": "INTEGER",
+            "tinyint": "SMALLINT",
+            "time": "TIME",
+        }
+        if field_type == "varchar" or field_type == "char":
+            return f"{field_type.upper()}({str(p_field_type[1])})"
+        if field_type == "decimal":
+            return f"DECIMAL({str(p_field_type[1])}, {str(p_field_type[2])})"
+        return type_map.get(field_type, field_type.upper())
+
+    def _connect(self, p_db_name):
+        """Open a PostgreSQL connection."""
+        return psycopg.connect(
+            host=self.host_name,
+            user=self.user_name,
+            password=self._password,
+            dbname=p_db_name,
+            port=self.db_port,
+            **self._connection_kwargs,
+        )
