@@ -1,9 +1,7 @@
 # docker-compose.yaml
 services:
   db:
-    container_name: "${PROJECT_NAME}_db"
-    image: mysql:8.3.0
-    command: mysqld --default-authentication-plugin=mysql_native_password
+    image: postgres:16-alpine
     environment:
       INSTALLER_USER_ID: "${INSTALLER_USERID}"
       INSTALLER_USER_PWD: "${INSTALLER_PWD}"
@@ -15,5 +13,9 @@ services:
       PROJECT_NAME: "${PROJECT_NAME}"
     ports:
       - "${MYSQL_TCP_PORT}:3306"
-    volumes:
-      - ./scripts/setup_db.sql:/docker-entrypoint-initdb.d/setup_db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -uroot -p$$MYSQL_ROOT_PASSWORD -h 127.0.0.1 --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s

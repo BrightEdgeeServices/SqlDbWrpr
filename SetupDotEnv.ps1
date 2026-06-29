@@ -2,24 +2,57 @@ Write-Host ''
 $dateTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 Write-Host "=[ START $dateTime ]==============================[ SetupDotEnv.ps1 ]=" -ForegroundColor Blue
 Write-Host "Executing $PSCommandPath..." -ForegroundColor Yellow
-$filePath = "$env:PROJECT_DIR\.env"
+
+function Get-RequiredEnvValue {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$VariableName
+    )
+    $value = [Environment]::GetEnvironmentVariable($VariableName)
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        throw "Required environment variable '$VariableName' is missing or empty."
+    }
+    return $value
+}
+
+function Get-EnvValueOrDefault {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$VariableName,
+        [Parameter(Mandatory = $true)]
+        [string]$DefaultValue
+    )
+    $value = [Environment]::GetEnvironmentVariable($VariableName)
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        return $DefaultValue
+    }
+    return $value
+}
+
+$scriptDir = Split-Path -Parent $PSCommandPath
+$filePath = Join-Path -Path $scriptDir -ChildPath ".env"
 
 # Define the contents of the file
 $fileContent = @"
-INSTALLER_USERID=$env:INSTALLER_USERID
-INSTALLER_PWD=$env:INSTALLER_PWD
-MYSQL_DATABASE=$env:MYSQL_DATABASE
-MYSQL_HOST=$env:MYSQL_HOST
-MYSQL_PASSWORD=$env:MYSQL_PASSWORD
-MYSQL_ROOT_PASSWORD=N0Pa55wrd
-MYSQL_TCP_PORT=$env:MYSQL_TCP_PORT
-MYSQL_USER=$env:MYSQL_USER
-PROJECT_DIR=$env:PROJECT_DIR
-PROJECT_NAME=$env:PROJECT_NAME
-VENV_ENVIRONMENT=$env:VENV_ENVIRONMENT
+DEV_AUTO_MYSQL_HOST=$(Get-RequiredEnvValue -VariableName "DEV_AUTO_MYSQL_HOST")
+DEV_AUTO_MYSQL_TCP_PORT=$(Get-RequiredEnvValue -VariableName "DEV_AUTO_MYSQL_TCP_PORT")
+DEV_AUTO_OVERRIDE=$(Get-RequiredEnvValue -VariableName "DEV_AUTO_OVERRIDE")
+DEV_AUTO_RTEAPI_REDIS_PORT=$(Get-RequiredEnvValue -VariableName "DEV_AUTO_RTEAPI_REDIS_PORT")
+DEV_DB_ROLLBACK_OVERRIDE=$(Get-RequiredEnvValue -VariableName "DEV_DB_ROLLBACK_OVERRIDE")
+INSTALLER_USERID=$(Get-RequiredEnvValue -VariableName "INSTALLER_USERID")
+INSTALLER_PWD=$(Get-RequiredEnvValue -VariableName "INSTALLER_PWD")
+MYSQL_DATABASE=$(Get-RequiredEnvValue -VariableName "MYSQL_DATABASE")
+MYSQL_HOST=$(Get-RequiredEnvValue -VariableName "MYSQL_HOST")
+MYSQL_PASSWORD=$(Get-RequiredEnvValue -VariableName "MYSQL_PASSWORD" )
+MYSQL_PWD=$(Get-RequiredEnvValue -VariableName "MYSQL_PWD")
+MYSQL_ROOT_PASSWORD=$(Get-RequiredEnvValue -VariableName "MYSQL_ROOT_PASSWORD")
+MYSQL_ROOT_USER=$(Get-RequiredEnvValue -VariableName "MYSQL_ROOT_USER")
+MYSQL_TCP_PORT=$(Get-RequiredEnvValue -VariableName "MYSQL_TCP_PORT")
+MYSQL_USER=$(Get-RequiredEnvValue -VariableName "MYSQL_USER")
+PROJECT_DIR=$(Get-RequiredEnvValue -VariableName "PROJECT_DIR")
+PROJECT_NAME=$(Get-RequiredEnvValue -VariableName "PROJECT_NAME")
+VENV_ENVIRONMENT=$(Get-RequiredEnvValue -VariableName "VENV_ENVIRONMENT")
 
-# SQLALCHEMY_SILENCE_UBER_WARNING=1
-# PYTHONUNBUFFERED=1
 "@
 
 # Write the contents to the file
