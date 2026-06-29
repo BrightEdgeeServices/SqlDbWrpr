@@ -1,8 +1,8 @@
-"""Wrapper for importing CSV and Text files into MySQL and Postgresql.
+"""Database wrapper utilities for MySQL and PostgreSQL.
 
-Only the MySQL implementation is working.  The MSSQL ODBC implementation
-is giving me a lot of shit with the connection and I gave up for now to
-get it working.
+SqlDbWrpr creates databases and tables from either the legacy dictionary
+structure or SQLAlchemy metadata, then imports and exports CSV data through a
+small DB-API based wrapper.
 """
 
 import datetime
@@ -31,7 +31,7 @@ class SchemaSourceError(ValueError):
 
 
 class SQLDbWrpr:
-    """This module creates a wrapper for the MySql database."""
+    """Base wrapper for schema creation and CSV import/export operations."""
 
     def __init__(
         self,
@@ -52,18 +52,25 @@ class SQLDbWrpr:
         p_ssl_key=None,
         p_ssl_cert=None,
     ):
-        """Create database with supplied structure and return a connector to the database
+        """Initialize common wrapper state and resolve the database schema.
+
+        A legacy `p_db_structure` dictionary takes precedence. If it is not
+        supplied, SQLAlchemy metadata is read from `p_sqlalchemy_metadata` or
+        from `p_sqlalchemy_base.metadata`. A `SchemaSourceError` is raised when
+        none of those schema sources are available.
 
         Parameters
-        - p_host_name = Host to connect to
-        - p_user_name = User name for connection
-        - p_password = paswword of user
-        - ReCreate = Recresate the database or connect to existing database
-        - db_name =
-        - table_details: Details of the tables to be created
-        - batch_size:    Bulk data will be managed by batch_size to commit
-        - p_bar_len:     Length for the progress bar
-        - p_msg_width:   Width of message before progress bar
+        - p_host_name: Host to connect to.
+        - p_user_name: User name for the connection.
+        - p_password: Password for the connection.
+        - p_recreate_db: Recreate the database when the backend supports it.
+        - p_db_name: Database name.
+        - p_db_structure: Legacy SqlDbWrpr table/field dictionary.
+        - p_sqlalchemy_base: Declarative base that exposes SQLAlchemy metadata.
+        - p_sqlalchemy_metadata: SQLAlchemy MetaData instance.
+        - p_batch_size: Number of rows committed per import batch.
+        - p_bar_len: Length of progress bars.
+        - p_msg_width: Width of progress messages.
         """
         self.logger_name = __name__
         self.logger = logging.getLogger(self.logger_name)
@@ -104,7 +111,7 @@ class SQLDbWrpr:
         self.db_port = p_db_port
 
     def close(self):
-        """Close the connention"""
+        """Close the active database connection."""
         if self.conn:
             self.conn.close()
 
@@ -198,10 +205,10 @@ class SQLDbWrpr:
         return True
 
     def create_tables(self):
-        """Create db tables from MySQL.table_details dict"""
+        """Create database tables, indexes, and constraints from the resolved schema."""
 
         def build_db(p_db_sql_str_set):
-            """Description"""
+            """Execute the generated table or index SQL statements."""
             for sql_set in p_db_sql_str_set:
                 try:
                     self.cur.execute(sql_set[1])
@@ -221,7 +228,7 @@ class SQLDbWrpr:
             p_idx_set_up_list,
             p_constraint_set_up_list,
         ):
-            """Description"""
+            """Combine column, primary-key, index, and constraint SQL."""
             table_set_up_str = p_table_set_up_str
             table_set_up_str += p_primary_key_str
             for idx_str in p_idx_set_up_list:
@@ -235,7 +242,7 @@ class SQLDbWrpr:
 
         def build_constraints(p_table_name):
             # noinspection PySingleQuotedDocstring
-            """Description"""
+            """Build foreign-key constraint SQL for one table."""
             constraint_list = []
             fkey_nr_list = []
             for field_name in self.db_structure[p_table_name]:
@@ -261,10 +268,10 @@ class SQLDbWrpr:
         # def build_constraints
 
         def build_all_indexes(p_table_name):
-            """Description"""
+            """Build inline or post-create index SQL for one table."""
 
             # def build_primary_key_idx(p_table_name):
-            #     '''Description'''
+            #     '''Build primary-key index SQL.'''
             #     idx_name_list = []
             #     idx_str_list = []
             #     pkey = get_primary_key(p_table_name)
@@ -279,7 +286,7 @@ class SQLDbWrpr:
             # # end build_primary_key_idx
 
             def build_unique_key_idx(p_table_name, p_dx_name_list, p_idx_str_list):
-                """Description"""
+                """Build grouped index definitions from legacy field metadata."""
                 idx_list = {}
                 idx_name_list = p_dx_name_list
                 idx_str_list = p_idx_str_list
@@ -325,7 +332,7 @@ class SQLDbWrpr:
         # def build_all_indexes
 
         def build_primary_key_sql_str(p_table_name):
-            """Description"""
+            """Build the primary-key clause for one table."""
             primary_key_det = get_primary_key(p_table_name)
             sql_str = "PRIMARY KEY ({}), ".format(self.quote_identifier_list(primary_key_det["Flds"]))
             return sql_str
@@ -333,7 +340,7 @@ class SQLDbWrpr:
         # def build_primary_key_sql_str
 
         def build_table_sql_str(p_table_name):
-            """Description"""
+            """Build the CREATE TABLE prefix and column definitions."""
             sql_str = f"CREATE TABLE {self.quote_identifier(p_table_name)} ("
             for field_name in self.db_structure[p_table_name]:
                 field_type_st_ref = self.db_structure[p_table_name][field_name]["Type"]
@@ -351,7 +358,7 @@ class SQLDbWrpr:
         # end build_table_sql_str
 
         def get_foreign_key(p_table_name, p_field_name):
-            """Description"""
+            """Return normalized foreign-key metadata for a field."""
             fkey = {
                 "Present": False,
                 "FKeyFlds": [],
@@ -389,7 +396,7 @@ class SQLDbWrpr:
         # end get_foreign_key
 
         def get_primary_key(p_table_name):
-            """Description"""
+            """Return normalized primary-key metadata for a table."""
             pkey = {"Present": False, "Flds": (), "SortPairList": [], "SortPairStr": []}
             for field_name in self.db_structure[p_table_name]:
                 pkey_field_det = self.db_structure[p_table_name][field_name]
@@ -413,7 +420,7 @@ class SQLDbWrpr:
         # end get_primary_key
 
         def order_table_build_list(p_db_sql_str_set, p_constraint_set_up_list):
-            """Description"""
+            """Order table creation so referenced tables are created first."""
             db_sql_str_set = p_db_sql_str_set
             ordered = False
             while not ordered:
@@ -447,13 +454,13 @@ class SQLDbWrpr:
         # end order_table_build_list
 
         def structure_validation():
-            """Description"""
+            """Validate schema relationships before SQL generation."""
 
             def check_pkey_fkey_overlap(p_remove_fkey_pkey__overlap=True):
-                """Description"""
+                """Detect and optionally remove primary-key/foreign-key overlap."""
 
                 def partial_overlap(p_fkey, p_pkey):
-                    """Description"""
+                    """Return whether a foreign key partially overlaps a primary key."""
                     is_overlap = False
                     for field_name in p_fkey["FKeyFlds"]:
                         if field_name in p_pkey["Flds"]:
@@ -463,7 +470,7 @@ class SQLDbWrpr:
                 # end partial_overlap
 
                 def remove_fkey(p_fkey):
-                    """Description"""
+                    """Remove a foreign-key definition from all participating fields."""
                     for field_name in self.db_structure[p_fkey["FKeyTable"]]:
                         if self.db_structure[p_fkey["FKeyTable"]][field_name]["Params"]["FKey"]:
                             if (
@@ -541,6 +548,7 @@ class SQLDbWrpr:
         return success
 
     def create_users(self, p_admin_user, p_new_users):
+        """Create MySQL users that do not already exist."""
         c_user_name = 0
         self.cur.execute("SELECT User, Host FROM mysql.user")
         curr_users = self.cur.fetchall()
@@ -747,7 +755,7 @@ class SQLDbWrpr:
         return file_name_list
 
     def get_db_field_types(self):
-        """Description"""
+        """Populate field type lookup lists used during import/export."""
         for p_table_name in self.db_structure:
             self.char_fields[p_table_name] = []
             self.non_char_fields[p_table_name] = []
@@ -761,6 +769,7 @@ class SQLDbWrpr:
                     self.non_char_fields[p_table_name].append(field)
 
     def grant_rights(self, p_admin_user, p_user_rights):
+        """Grant configured MySQL rights to users."""
         c_user_name = 0
         # c_password = 1
         c_host = 1
@@ -807,41 +816,40 @@ class SQLDbWrpr:
         p_verbose=False,
         p_replace=False,
     ):
-        """Import a csv file into a database table.
+        """Import CSV rows into a database table.
 
         Parameters
         - p_table_name
-          Table name to import the csv data into
+          Table name to import the CSV data into
         - p_csv_file_name = ''
-          Csv file name.  Empty if structure contained in p_csv_db
+          CSV file name. Empty when rows are supplied in p_csv_db
         - p_key = ''
           Key used to insert in table
         - p_header = ''
-          - Header of csv files
+          - Header of CSV files
         - p_del_head = ''
           - Delete the header
         - p_csv_db = ''
-          - Contains the csv table in a structure and makes p_csv_file_name obsolete.
+          - Contains the CSV rows directly and makes p_csv_file_name obsolete.
         - p_csv_corr_str_file_name = ''
-          - String that contains any strings that should be replace in the csv
-            file before parsing
+          - File containing string replacements to apply before parsing
         - p_vol_type = 'Multi'
           - Multi - Read multiple volume
           - Single - Read single file
         - p_verbose = False
-          - Determine if there are any output to screen
+          - Determine whether progress output is written to screen
         - debug = False
-          - Switch debug on
+          - Switch debug output on
         - p_replace = False
           - False - INSERT into database
           - True - REPLACE into database
         """
 
         def import_volume(p_csv_db, p_header, p_verbose):
-            """Description"""
+            """Prepare and write one in-memory CSV volume to the active table."""
 
             def convert_str_to_none(p_non_char_fields_idx, p_csv_db):
-                """Description"""
+                """Convert blank non-character values to None before insert."""
                 rows_to_del = []
                 csv_db = p_csv_db
                 list_len = len(csv_db)
@@ -883,7 +891,7 @@ class SQLDbWrpr:
             # end convert_str_to_none
 
             def find_non_char_field_idx(p_csv_db):
-                """Find the index of the fields that could potentially contain mepty strings."""
+                """Find non-character field indexes that may contain empty strings."""
                 non_char_fields_idx = []
                 for header_field_name in self.non_char_fields[p_table_name]:
                     for row_idx, data_field_name in enumerate(p_csv_db[0]):
@@ -895,7 +903,7 @@ class SQLDbWrpr:
             # end find_non_char_field_idx
 
             def fix_dates(p_csv_db, p_table_name, p_header):
-                """Ensure date and datetime fields in the database is valid."""
+                """Normalize date and datetime values before insert."""
                 c_field_idx = 0
                 c_field_type = 1
                 csv_db = p_csv_db
@@ -949,7 +957,7 @@ class SQLDbWrpr:
             # end fix_dates
 
             def write_to_table(p_csv_db):
-                """Write the data to a table"""
+                """Write prepared rows to the destination table."""
                 i = 1
                 j = 0  # In case batch size is more than all records
                 list_len = len(p_csv_db)
@@ -999,7 +1007,7 @@ class SQLDbWrpr:
         # end import_volume
 
         def import_single_volume(p_csv_db, p_header, p_verbose):
-            """Description"""
+            """Import one supplied in-memory CSV volume."""
             success = False
             # if not p_csv_db:
             #     if os.path.isfile(p_csv_file_name):
@@ -1025,7 +1033,7 @@ class SQLDbWrpr:
         # end import_single_volume
 
         def import_multi_volume(p_verbose, p_header):
-            """Description"""
+            """Import numbered CSV files until the next volume is missing."""
             vol_cntr = 1
             success = False
             vol_csv_file_name = p_csv_file_name
@@ -1078,7 +1086,7 @@ class SQLDbWrpr:
         p_verbose=False,
         p_debug=False,
     ):
-        """Import a csv file into a database table.
+        """Split CSV rows into one or more destination table imports.
 
         Parameters
         - p_split_struct - { 'Seq01': { 'TableName': Desttable_name1, 'Key': TableKey, 'Replace': False, 'Flds': [[ OrgField1, DestField1, [ Command, Parm1, Parm2, Parm3 ]],
@@ -1096,8 +1104,8 @@ class SQLDbWrpr:
           - Replace (boolean):   Either use REPLACE or INSERT SQL statement to add records to the table.  INSERT will cause
                                  a failure when the record to be added is a duplicate.
           - Fields (str):        Mandatory key word (in the python dict structure) to list the fields in the table
-          - OrgFieldN (str):     Field name from the csv file top copy to the database table
-          - DestFieldN (str):    Destination filed where OrgFieldN will be copied into
+          - OrgFieldN (str):     Field name from the CSV file to copy to the database table
+          - DestFieldN (str):    Destination field where OrgFieldN will be copied into
           - Command (int):       0 = Copy OrgFieldN to DestFieldN as is
                                      Parm1 = Truncate OrgFieldN at Parm1 if it is a string and insert into DestFieldN.  0 for no truncation.  Non 'str' will not be truncated
                                      Parm2 = True if you do not want to add the row if the result is empty, else False
@@ -1243,7 +1251,7 @@ class SQLDbWrpr:
 
     @classmethod
     def from_sqlalchemy_metadata(cls, p_sqlalchemy_metadata):
-        """Convert SQLAlchemy metadata into the legacy SqlDbWrpr structure."""
+        """Convert SQLAlchemy metadata into the legacy SqlDbWrpr schema structure."""
         if not getattr(p_sqlalchemy_metadata, "tables", None):
             raise SchemaSourceError("SQLAlchemy metadata does not define any tables")
         db_structure = {}
@@ -1253,7 +1261,7 @@ class SQLDbWrpr:
 
     @staticmethod
     def resolve_db_structure(p_db_structure=None, p_sqlalchemy_base=None, p_sqlalchemy_metadata=None):
-        """Resolve the database structure from explicit config or SQLAlchemy metadata."""
+        """Resolve schema from explicit config, SQLAlchemy metadata, or declarative base."""
         if p_db_structure:
             return p_db_structure
         if p_sqlalchemy_metadata is None and p_sqlalchemy_base is not None:
@@ -1392,6 +1400,7 @@ class SQLDbWrpr:
 
     @staticmethod
     def _print_err_msg(p_err, p_msg=""):
+        """Print a formatted database error message."""
         msg = p_msg
         if p_msg:
             msg = f"{p_msg}\n"
@@ -1406,7 +1415,7 @@ class SQLDbWrpr:
 
 
 class MySQL(SQLDbWrpr):
-    """This module creates a wrapper for the MySql database."""
+    """Wrapper for MySQL databases."""
 
     def __init__(
         self,
@@ -1431,7 +1440,7 @@ class MySQL(SQLDbWrpr):
         # p_ssl_cert=None
         **kwargs,
     ):
-        """Description"""
+        """Connect to MySQL and optionally recreate or select the target database."""
         super().__init__(
             p_host_name=p_host_name,
             p_user_name=p_user_name,

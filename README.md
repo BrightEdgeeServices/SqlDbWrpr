@@ -9,18 +9,24 @@
 
 ## Overview
 
-SqlDbWrpr is a Python-based utility designed to simplify interactions with SQL databases, specifically MySQL and MSSQL. It provides a high-level abstraction for common database operations, making it easier to manage database schemas, import/export data, and handle user permissions.
+SqlDbWrpr is a Python utility for creating SQL database schemas and moving CSV data into and out of those schemas. It currently provides wrappers for MySQL and PostgreSQL.
+
+Schemas can be supplied in two ways:
+
+1. A legacy `db_structure` dictionary.
+2. SQLAlchemy metadata, either directly through `p_sqlalchemy_metadata` or through `p_sqlalchemy_base.metadata`.
+
+When both are supplied, `p_db_structure` takes precedence for backward compatibility. If no supported schema source is supplied, `SchemaSourceError` is raised.
 
 ### Key Features
 
-- **Schema Management**: Define your database structure (tables, fields, types, primary keys, foreign keys, and indexes) using a simple Python dictionary. SqlDbWrpr handles the creation of the database and tables based on this definition.
+- **Schema Management**: Create databases, tables, primary keys, foreign keys, and indexes from a legacy dictionary or SQLAlchemy metadata.
 - **Data Import/Export**:
-  - Effortlessly import data from CSV files into your SQL tables. It supports both single and multi-volume CSV files and handles data type conversions and date formatting.
-  - Export table data or custom SQL query results back to CSV files, with options for multi-volume exports if the data size is large.
-- **User and Permission Management**: Create and delete database users and grant them specific rights across the database.
-- **SSL Support**: Secure your database connections with built-in support for SSL CA, key, and certificate files.
-- **Batch Processing**: Optimize performance during data imports with configurable batch sizes.
-- **Multi-Database Support**: Includes dedicated classes for MySQL and MSSQL, ensuring compatibility across different SQL environments.
+  - Import CSV data from files or in-memory rows, including single-volume and numbered multi-volume files.
+  - Export full tables or custom SQL query results to CSV, including optional multi-volume exports.
+- **Database Support**: Includes MySQL and PostgreSQL wrappers with dialect-specific SQL rendering.
+- **User and Permission Management**: Create MySQL users and grant database rights.
+- **Batch Processing**: Configure import batch sizes for larger CSV loads.
 
 ### Installation
 
@@ -28,24 +34,46 @@ SqlDbWrpr is a Python-based utility designed to simplify interactions with SQL d
 pip install SqlDbWrpr
 ```
 
-### Quick Start
+### Quick Start With A Legacy Structure
 
 ```python
 from sqldbwrpr.sqldbwrpr import MySQL
 
-# Define your database structure
+field_defaults = {
+    "PrimaryKey": ["", ""],
+    "FKey": [],
+    "Index": [],
+    "NN": "",
+    "B": "",
+    "UN": "",
+    "ZF": "",
+    "AI": "",
+    "G": "",
+    "DEF": "",
+}
+
 db_structure = {
     "Users": {
         "ID": {
             "Type": ["int"],
-            "Params": {"PrimaryKey": ["Y", "A"], "NN": "Y", "AI": "Y"},
+            "Params": {
+                **field_defaults,
+                "PrimaryKey": ["Y", "A"],
+                "NN": "Y",
+                "AI": "Y",
+            },
+            "Possible Values": "",
+            "Comment": "",
         },
-        "Username": {"Type": ["varchar", 50], "Params": {"NN": "Y"}},
-        "Email": {"Type": ["varchar", 100], "Params": {"NN": "Y"}},
+        "Username": {
+            "Type": ["varchar", 50],
+            "Params": {**field_defaults, "NN": "Y"},
+            "Possible Values": "",
+            "Comment": "",
+        },
     }
 }
 
-# Initialize the wrapper
 db = MySQL(
     p_host_name="localhost",
     p_user_name="root",
@@ -55,11 +83,39 @@ db = MySQL(
     p_recreate_db=True,
 )
 
-# Import data from CSV
-db.import_csv("Users", "users_data.csv")
-
-# Export data to CSV
+db.import_csv("Users", p_csv_db=[("Username",), ("alice",)], p_vol_type="Single")
 db.export_to_csv("exported_users.csv", "Users")
+```
+
+### Quick Start With SQLAlchemy Metadata
+
+```python
+from sqlalchemy import Column
+from sqlalchemy import Integer
+from sqlalchemy import MetaData
+from sqlalchemy import String
+from sqlalchemy import Table
+
+from sqldbwrpr.sqldbwrpr import PostgreSQL
+
+metadata = MetaData()
+Table(
+    "Users",
+    metadata,
+    Column("ID", Integer, primary_key=True, autoincrement=True),
+    Column("Username", String(50), nullable=False),
+)
+
+db = PostgreSQL(
+    p_host_name="localhost",
+    p_user_name="postgres",
+    p_password="yourpassword",
+    p_db_name="my_database",
+    p_sqlalchemy_metadata=metadata,
+    p_recreate_db=True,
+)
+
+db.import_csv("Users", p_csv_db=[("Username",), ("alice",)], p_vol_type="Single")
 ```
 
 ______________________________________________________________________
