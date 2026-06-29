@@ -14,7 +14,6 @@ import csvwrpr
 import displayfx
 import fixdate
 import mysql.connector
-import pyodbc
 from beetools import msg as bm
 from mysql.connector import Error
 from mysql.connector import errorcode
@@ -25,6 +24,10 @@ from mysql.connector import errorcode
 # _PROJ_DESC = __doc__.split("\n")[0]
 # _PROJ_PATH = Path(__file__)
 # _PROJ_NAME = _PROJ_PATH.stem
+
+
+class SchemaSourceError(ValueError):
+    """Raised when no supported database schema source is supplied."""
 
 
 class SQLDbWrpr:
@@ -38,6 +41,8 @@ class SQLDbWrpr:
         p_recreate_db=False,
         p_db_name="",
         p_db_structure=None,
+        p_sqlalchemy_base=None,
+        p_sqlalchemy_metadata=None,
         p_batch_size=10000,
         p_bar_len=50,
         p_msg_width=50,
@@ -70,10 +75,11 @@ class SQLDbWrpr:
         self.conn = None
         self.cur = None
         self.db_name = p_db_name
-        if p_db_structure:
-            self.db_structure = p_db_structure
-        else:
-            self.db_structure = {}
+        self.db_structure = self.resolve_db_structure(
+            p_db_structure=p_db_structure,
+            p_sqlalchemy_base=p_sqlalchemy_base,
+            p_sqlalchemy_metadata=p_sqlalchemy_metadata,
+        )
         self.delimiter = ","
         self.fkey_ref_act = {
             "C": "CASCADE",
@@ -1181,6 +1187,155 @@ class SQLDbWrpr:
                 p_replace=p_split_struct[seq]["Replace"],
             )
 
+    @classmethod
+    def from_sqlalchemy_metadata(cls, p_sqlalchemy_metadata):
+        """Convert SQLAlchemy metadata into the legacy SqlDbWrpr structure."""
+        if not getattr(p_sqlalchemy_metadata, "tables", None):
+            raise SchemaSourceError("SQLAlchemy metadata does not define any tables")
+        db_structure = {}
+        for table in p_sqlalchemy_metadata.sorted_tables:
+            db_structure[table.name] = cls._table_to_legacy_structure(table)
+        return db_structure
+
+    @staticmethod
+    def resolve_db_structure(p_db_structure=None, p_sqlalchemy_base=None, p_sqlalchemy_metadata=None):
+        """Resolve the database structure from explicit config or SQLAlchemy metadata."""
+        if p_db_structure:
+            return p_db_structure
+        if p_sqlalchemy_metadata is None and p_sqlalchemy_base is not None:
+            p_sqlalchemy_metadata = getattr(p_sqlalchemy_base, "metadata", None)
+        if p_sqlalchemy_metadata is not None:
+            return SQLDbWrpr.from_sqlalchemy_metadata(p_sqlalchemy_metadata)
+        raise SchemaSourceError("Supply p_db_structure, p_sqlalchemy_metadata, or p_sqlalchemy_base")
+
+    @staticmethod
+    def _action_to_legacy_code(p_action):
+        """Convert SQLAlchemy foreign-key actions to legacy codes."""
+        if p_action is None:
+            return "N"
+        action = p_action.upper().replace(" ", "_")
+        action_map = {
+            "CASCADE": "C",
+            "RESTRICT": "R",
+            "SET_DEFAULT": "D",
+            "SET_NULL": "N",
+        }
+        return action_map[action]
+
+    @staticmethod
+    def _build_default_field_params():
+        """Build the legacy default parameter block for a field."""
+        return {
+            "PrimaryKey": ["", ""],
+            "FKey": [],
+            "Index": [],
+            "NN": "",
+            "B": "",
+            "UN": "",
+            "ZF": "",
+            "AI": "",
+            "G": "",
+            "DEF": "",
+        }
+
+    @staticmethod
+    def _column_type_to_legacy(p_column):
+        """Convert a SQLAlchemy column type to the legacy type list."""
+        column_type = p_column.type
+        type_name = column_type.__class__.__name__.lower()
+        if "biginteger" in type_name:
+            return ["bigint"]
+        if "boolean" in type_name:
+            return ["boolean"]
+        if "char" in type_name or "string" in type_name or "varchar" in type_name:
+            if getattr(column_type, "length", None) is None:
+                return ["varchar"]
+            if type_name == "char":
+                return ["char", column_type.length]
+            return ["varchar", column_type.length]
+        if type_name == "date":
+            return ["date"]
+        if "datetime" in type_name:
+            return ["datetime"]
+        if "integer" in type_name:
+            return ["int"]
+        if "largebinary" in type_name or "blob" in type_name or "binary" in type_name:
+            return ["blob"]
+        if "numeric" in type_name or "decimal" in type_name:
+            precision = getattr(column_type, "precision", None)
+            scale = getattr(column_type, "scale", None)
+            if precision is not None and scale is not None:
+                return ["decimal", precision, scale]
+            return ["decimal"]
+        if type_name == "time":
+            return ["time"]
+        return [type_name]
+
+    @staticmethod
+    def _column_to_legacy_field(p_column):
+        """Convert a SQLAlchemy column to a legacy field definition."""
+        field_type = SQLDbWrpr._column_type_to_legacy(p_column)
+        params = SQLDbWrpr._build_default_field_params()
+        if not p_column.nullable or p_column.primary_key:
+            params["NN"] = "Y"
+        if p_column.autoincrement is True:
+            params["AI"] = "Y"
+        if p_column.default is not None and getattr(p_column.default, "is_scalar", False):
+            params["DEF"] = str(p_column.default.arg)
+        if field_type[0] == "blob":
+            params["B"] = "Y"
+        return {
+            "Type": field_type,
+            "Params": params,
+            "Possible Values": "",
+            "Comment": p_column.comment or "",
+        }
+
+    @staticmethod
+    def _set_foreign_keys(p_table, p_table_structure):
+        """Set legacy foreign-key metadata on converted table fields."""
+        for fkey_nr, constraint in enumerate(p_table.foreign_key_constraints, start=1):
+            elements = list(constraint.elements)
+            for field_order, element in enumerate(elements, start=1):
+                p_table_structure[element.parent.name]["Params"]["FKey"] = [
+                    fkey_nr,
+                    field_order,
+                    element.column.table.name,
+                    element.column.name,
+                    SQLDbWrpr._action_to_legacy_code(constraint.ondelete),
+                    SQLDbWrpr._action_to_legacy_code(constraint.onupdate),
+                ]
+
+    @staticmethod
+    def _set_indexes(p_table, p_table_structure):
+        """Set legacy index metadata on converted table fields."""
+        indexes = sorted(p_table.indexes, key=lambda p_index: p_index.name or "")
+        for idx_nr, index in enumerate(indexes, start=1):
+            for field_order, column in enumerate(index.columns, start=1):
+                p_table_structure[column.name]["Params"]["Index"] = [
+                    idx_nr,
+                    field_order,
+                    "A",
+                    "U" if index.unique else "",
+                ]
+
+    @staticmethod
+    def _set_primary_key(p_table, p_table_structure):
+        """Set legacy primary-key metadata on converted table fields."""
+        for column in p_table.primary_key.columns:
+            p_table_structure[column.name]["Params"]["PrimaryKey"] = ["Y", "A"]
+
+    @staticmethod
+    def _table_to_legacy_structure(p_table):
+        """Convert a SQLAlchemy table to the legacy table structure."""
+        table_structure = {}
+        for column in p_table.columns:
+            table_structure[column.name] = SQLDbWrpr._column_to_legacy_field(column)
+        SQLDbWrpr._set_foreign_keys(p_table, table_structure)
+        SQLDbWrpr._set_indexes(p_table, table_structure)
+        SQLDbWrpr._set_primary_key(p_table, table_structure)
+        return table_structure
+
     @staticmethod
     def _print_err_msg(p_err, p_msg=""):
         msg = p_msg
@@ -1208,6 +1363,8 @@ class MySQL(SQLDbWrpr):
         p_recreate_db=False,
         p_db_name=None,
         p_db_structure=None,
+        p_sqlalchemy_base=None,
+        p_sqlalchemy_metadata=None,
         p_batch_size=10000,
         p_bar_len=50,
         p_msg_width=50,
@@ -1228,6 +1385,8 @@ class MySQL(SQLDbWrpr):
             p_db_name=p_db_name,
             p_recreate_db=p_recreate_db,
             p_db_structure=p_db_structure,
+            p_sqlalchemy_base=p_sqlalchemy_base,
+            p_sqlalchemy_metadata=p_sqlalchemy_metadata,
             p_batch_size=p_batch_size,
             p_bar_len=p_bar_len,
             p_msg_width=p_msg_width,
@@ -1309,62 +1468,3 @@ class MySQL(SQLDbWrpr):
             self.conn.commit()
         self.success = True
         pass
-
-
-class MSSQL(SQLDbWrpr):
-    """This module creates a wrapper for the MySql database."""
-
-    def __init__(
-        self,
-        p_host_name="localhost",
-        p_user_name="",
-        p_password="",
-        p_recreate_db=False,
-        p_db_name=None,
-        p_db_structure=None,
-        p_batch_size=10000,
-        p_bar_len=50,
-        p_msg_width=50,
-        p_verbose=False,
-    ):
-        """Description"""
-        super().__init__(
-            p_host_name=p_host_name,
-            p_user_name=p_user_name,
-            p_password=p_password,
-            p_db_name=p_db_name,
-            p_recreate_db=p_recreate_db,
-            p_db_structure=p_db_structure,
-            p_batch_size=p_batch_size,
-            p_bar_len=p_bar_len,
-            p_msg_width=p_msg_width,
-            p_verbose=p_verbose,
-        )
-        try:
-            self.host_name = "156.38.224.15,1433"
-            self.user_name = "chessaco_chessanew"
-            self._password = "@Jv&F77%"
-            self.db_name = "chessaco_analytics"
-            self.driver = "{ODBC Driver 17 for SQL Server}"
-            # driver = pyodbc.drivers()
-            # con_str_1 = 'DRIVER={};SERVER={};DATABASE={};UID={};PWD={}'.format( self.driver, self.host_name, self.db_name, self.user_name, self._password )
-            con_str_2 = (
-                "DRIVER={ODBC Driver 17 for SQL Server};SERVER="
-                + self.host_name
-                + ";DATABASE="
-                + self.db_name
-                + ";UID="
-                + self.user_name
-                + ";PWD="
-                + self._password
-            )
-            self.conn = pyodbc.connect(con_str_2)
-            pass
-        except Error as err:
-            self.logger.error(err)
-        self.success = self.conn.is_connected()
-        if self.conn.is_connected():
-            self.cur = self.conn.cursor()
-            if self.re_create_db:
-                self.create_db()
-                self.success = self.create_tables()

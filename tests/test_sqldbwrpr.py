@@ -1,5 +1,4 @@
 from conftest import db_structure
-
 from sqldbwrpr.sqldbwrpr import MySQL
 
 

@@ -62,6 +62,47 @@ db.import_csv("Users", "users_data.csv")
 db.export_to_csv("exported_users.csv", "Users")
 ```
 
+______________________________________________________________________
+
+## Updating ReleaseNotes Instructions
+
+1. Run the `pushpy.ps1` script or manually commit the current changes.
+2. Generate the release notes
+3. Use one of the following AI propmpts in Notion to generate the release notes.
+
+- [Release - Update - General](https://www.notion.so/Release-Update-General-2c0bc8e6c6f38076b4cee82e3cf243fa?v=2c0bc8e6c6f3806e85db000c395f94ce&source=copy_link)
+- [Release - Update - VenvIt](https://www.notion.so/Release-Update-VenvIt-2c0bc8e6c6f380de84a0f3fbb8b5dda5?v=2c0bc8e6c6f3806e85db000c395f94ce&source=copy_link)
+
+or
+
+1. Use the following template and manually update the ReleaseNotes.md file.
+
+   ```
+    # Release ?.?.?
+    ## Summary of Changes
+    - bla, bla, bla
+    ## Next Heading
+    - bla, bla, bla
+    ---
+   ```
+
+2. You can repeat step 1 multiple times.
+
+3. You can repeat step 2 multiple times but update the ReleaseNotes that has not been published.
+
+4. Run the `pushpr.ps1` script once you are ready to create the PR to publish the release. TOy can also manually create
+   the tag, touch a file, commit and push the changes.
+
+5. Merge the PR in GitHub.
+
+6. Confirm the following:
+
+7. The release update reflects in GitHub
+
+8. The release update notification was sent
+
+______________________________________________________________________
+
 [cicd_codestyle_img]: https://img.shields.io/badge/code%20style-black-000000.svg "Black"
 [cicd_codestyle_lnk]: https://github.com/psf/black "Black"
 [cicd_pre_commit_img]: https://img.shields.io/github/actions/workflow/status/BrightEdgeeServices/SqlDbWrpr/pre-commit.yml?label=pre-commit "Pre-Commit"
