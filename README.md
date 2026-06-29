@@ -7,7 +7,11 @@
 | PyPI         | [![][pypi_release_img]][pypi_release_lnk] [![][pypi_py_versions_img]][pypi_py_versions_lnk] [![][pypi_format_img]][pypi_format_lnk] [![][pypi_downloads_img]][pypi_downloads_lnk]             |
 | Github       | [![][gh_issues_img]][gh_issues_lnk] [![][gh_language_img]][gh_language_lnk] [![][gh_last_commit_img]][gh_last_commit_lnk] [![][gh_deployment_img]][gh_deployment_lnk]                         |
 
-## Overview
+## Short description
+
+SqlDbWrpr is a Python wrapper that streamlines schema creation plus CSV import/export workflows for SQL backends.
+
+## Module Overview
 
 SqlDbWrpr is a Python utility for creating SQL database schemas and moving CSV data into and out of those schemas. It currently provides wrappers for MySQL and PostgreSQL.
 
@@ -27,6 +31,15 @@ When both are supplied, `p_db_structure` takes precedence for backward compatibi
 - **Database Support**: Includes MySQL and PostgreSQL wrappers with dialect-specific SQL rendering.
 - **User and Permission Management**: Create MySQL users and grant database rights.
 - **Batch Processing**: Configure import batch sizes for larger CSV loads.
+
+### Project Structure
+
+- `src/sqldbwrpr/`: Core library implementation, including MySQL and PostgreSQL wrappers.
+- `tests/`: Unit and integration-oriented test coverage for wrapper behaviour.
+- `scripts/`: SQL setup/bootstrap assets used for database initialization.
+- Root automation scripts (`*.ps1`) and CI configuration under `.github/workflows/` support setup and delivery.
+
+## Getting Started
 
 ### Installation
 
