@@ -81,6 +81,7 @@
     ]
     omit = [
         "./legacy/*",
+        "tests/fixtures.py",
     ]
 
 [tool.isort]
