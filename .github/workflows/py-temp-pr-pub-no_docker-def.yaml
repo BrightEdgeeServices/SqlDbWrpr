@@ -1,7 +1,7 @@
 # py-temp-pr-pub-no_docker-def.yaml
 # This is a template and should not be changed unless you are familiar with the
 # reusable GitHub Actions strategy of the company.
-name: Python Template PyPI Public No-Docker
+name: py-temp-pr-pub-no_docker-def
 
 on:
   push:
@@ -19,15 +19,14 @@ jobs:
       pull-requests: write
 
     if: ${{ github.ref_type != 'tag' }}
-    uses: BrightEdgeeServices/devops-automation/.github/workflows/py-wf-pr-pvt-no_docker-def.yaml@master
-#    with:
-#      run_publish: true
-    # secrets: inherit
+    uses: BrightEdgeeServices/devops-automation/.github/workflows/py-wf-pr-pub-no_docker-def.yaml@master
     secrets:
+      AUTHZ_CACHE_TTL_SEC:       ${{vars.AUTHZ_CACHE_TTL_SEC}}
+      AUTHZ_HOST:                ${{vars.AUTHZ_HOST}}
       GH_REPO_ACCESS_BEE_MASTER: ${{secrets.GH_REPO_ACCESS_BEE_MASTER }}
       GH_REPO_ACCESS_RTE_MASTER: ${{secrets.GH_REPO_ACCESS_RTE_MASTER }}
-      INSTALLER_USERID:         ${{vars.INSTALLER_USERID }}
-      INSTALLER_PWD:        ${{secrets.INSTALLER_USERPWD }}
+      INSTALLER_USERID:          ${{vars.INSTALLER_USERID }}
+      INSTALLER_PWD:             ${{secrets.INSTALLER_USERPWD }}
       MYSQL_DATABASE:            ${{vars.MYSQL_DATABASE }}
       MYSQL_HOST:                ${{vars.MYSQL_HOST }}
       MYSQL_PASSWORD:            ${{secrets.MYSQL_PASSWORD}}
