@@ -152,6 +152,29 @@ class TestSQLDbWrpr:
         finally:
             pg_db.close()
 
+    def test_build_index_sql_builds_unique_index_sql(self, postgresql_container):
+        """SQLDbWrpr.build_index_sql builds positive index SQL using PostgreSQL infrastructure."""
+        pg_db = PostgreSQL(
+            p_host_name=settings.MYSQL_HOST,
+            p_user_name=settings.INSTALLER_USERID,
+            p_password=settings.INSTALLER_PWD,
+            p_db_name=settings.MYSQL_DATABASE,
+            p_db_port=str(settings.MYSQL_TCP_PORT),
+            p_db_structure=DB_STRUCTURE,
+        )
+        try:
+            index_sql = SQLDbWrpr.build_index_sql(
+                pg_db,
+                "Member",
+                "idx_member_name",
+                [["Surname", 1, "A"], ["Name", 2, "D"]],
+                p_unique=True,
+            )
+
+            assert index_sql == 'UNIQUE INDEX "idx_member_name" ("Surname" ASC,"Name" DESC) VISIBLE, '
+        finally:
+            pg_db.close()
+
 
 class TestPostgreSQL:
     def test_create_users_creates_missing_user(self, postgresql_container):
