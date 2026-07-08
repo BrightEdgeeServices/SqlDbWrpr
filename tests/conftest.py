@@ -536,14 +536,16 @@ def make_db_container_fixture(*, db_class):
         if db_class.__name__ == "PostgreSQL":
             image = "postgres:16"
             container_port = f"{settings.MYSQL_TCP_PORT}/tcp"
+            command = None
             environment = {
                 "POSTGRES_DB": settings.MYSQL_DATABASE,
                 "POSTGRES_USER": settings.INSTALLER_USERID,
                 "POSTGRES_PASSWORD": settings.INSTALLER_PWD,
             }
         else:
-            image = "mysql:8"
+            image = "mysql:8.0"
             container_port = "3306/tcp"
+            command = "--default-authentication-plugin=mysql_native_password"
             environment = {
                 "MYSQL_DATABASE": settings.MYSQL_DATABASE,
                 "MYSQL_ROOT_PASSWORD": settings.MYSQL_ROOT_PASSWORD,
@@ -555,6 +557,7 @@ def make_db_container_fixture(*, db_class):
             pass
         container = client.containers.run(
             image,
+            command=command,
             environment=environment,
             ports={container_port: ("127.0.0.1", settings.MYSQL_TCP_PORT)},
             detach=True,
