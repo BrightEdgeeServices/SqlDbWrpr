@@ -1511,7 +1511,7 @@ class MySQL(SQLDbWrpr):
         """Delete MySQL users that exist."""
         c_user_name = 0
         c_host = 2
-        self.cur.execute("SELECT User FROM mysql.user")
+        self.cur.execute("SELECT CAST(User AS CHAR) FROM mysql.user")
         curr_users = [x[0] for x in self.cur.fetchall()]
         for user in p_del_users:
             if user[c_user_name] in curr_users:
