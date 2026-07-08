@@ -17,6 +17,7 @@ import mysql.connector
 import psycopg
 from beetools import msg as bm
 from mysql.connector import errorcode
+from psycopg import sql as psycopg_sql
 
 # from pathlib import Path
 
@@ -1735,8 +1736,10 @@ class PostgreSQL(SQLDbWrpr):
             if user_name not in curr_users:
                 try:
                     self.cur.execute(
-                        f"CREATE USER {self.quote_identifier(user_name)} WITH PASSWORD %s",
-                        (password,),
+                        psycopg_sql.SQL("CREATE USER {} WITH PASSWORD {}").format(
+                            psycopg_sql.Identifier(user_name),
+                            psycopg_sql.Literal(password),
+                        )
                     )
                 except self.db_error as err:
                     self._print_err_msg(err, "Could not create user")

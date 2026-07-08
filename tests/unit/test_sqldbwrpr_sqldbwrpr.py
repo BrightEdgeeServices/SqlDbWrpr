@@ -57,6 +57,33 @@ class TestMySQL:
 
 
 class TestPostgreSQL:
+    def test_create_users_creates_missing_user(self, postgresql_container):
+        """PostgreSQL.create_users creates a missing login role in the live database."""
+        pg_db = PostgreSQL(
+            p_host_name=settings.MYSQL_HOST,
+            p_user_name=settings.INSTALLER_USERID,
+            p_password=settings.INSTALLER_PWD,
+            p_db_name=settings.MYSQL_DATABASE,
+            p_db_port=str(settings.MYSQL_TCP_PORT),
+            p_db_structure=DB_STRUCTURE,
+        )
+        user_name = "create_users_positive_user"
+        user_password = "CreateUsersPositivePwd1!"
+        try:
+            pg_db.cur.execute(f'DROP USER IF EXISTS "{user_name}"')
+
+            pg_db.create_users(
+                [settings.INSTALLER_USERID, settings.INSTALLER_PWD],
+                [[user_name, user_password]],
+            )
+
+            pg_db.cur.execute("SELECT rolname FROM pg_roles WHERE rolname = %s", (user_name,))
+            assert pg_db.cur.fetchone() == (user_name,)
+            assert pg_db.success is True
+        finally:
+            pg_db.cur.execute(f'DROP USER IF EXISTS "{user_name}"')
+            pg_db.close()
+
     def test_init_dict_structure(self, postgresql_container):
         """PostgreSQL.__init__ connects to the containerised database and opens a live cursor."""
         pg_db = PostgreSQL(
