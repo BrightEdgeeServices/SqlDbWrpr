@@ -1,7 +1,13 @@
+import time
+
+import docker
 import pytest
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
 
-db_structure = {
+load_dotenv()
+
+DB_STRUCTURE = {
     "Rating": {
         "Date": {
             "Type": ["date"],
@@ -139,7 +145,7 @@ db_structure = {
                 "DEF": "",
             },
             "Possible Values": "",
-            "Comment": "Sosial security nr filled with zeros",
+            "Comment": "Social security nr filled with zeros",
         },
         "Country": {
             "Type": ["char", 3],
@@ -436,10 +442,28 @@ db_structure = {
                 "DEF": "",
             },
             "Possible Values": "",
-            "Comment": "OrgId from Organizarion",
+            "Comment": "OrgId from Organization",
         },
     },
 }
+TBL_TXT_COUNTRY = """\
+Code;Description
+NOR;Norway
+CHN;China
+USA;United States of America
+"""
+TBL_TUP_COUNTRY = [
+    ("CHN", "China"),
+    ("NOR", "Norway"),
+    ("USA", "United States of America"),
+]
+
+
+class DevAutoSettings(BaseSettings):
+    DEV_AUTO_OVERRIDE: bool = False
+    DEV_DB_ROLLBACK_OVERRIDE: bool = False
+    DEV_AUTO_MYSQL_HOST: str = ""
+    DEV_AUTO_MYSQL_TCP_PORT: int = ""
 
 
 class Settings(BaseSettings):
@@ -454,7 +478,64 @@ class Settings(BaseSettings):
     VENV_ENVIRONMENT: str = "prod"
 
 
-@pytest.fixture
-def get_settings() -> Settings:
-    return Settings()
-    # pass
+dev_auto_settings = DevAutoSettings()
+settings = Settings()
+
+
+def _wait_for_db_container(p_container, p_timeout=60):
+    """Poll the container status until it reports healthy or the timeout expires."""
+    deadline = time.monotonic() + p_timeout
+    while time.monotonic() < deadline:
+        p_container.reload()
+        if p_container.status == "running":
+            return
+        time.sleep(1)
+    raise RuntimeError(f"Database container {p_container.name!r} did not start within {p_timeout} seconds")
+
+
+def make_db_container_fixture(*, db_class):
+    """Return a session-scoped pytest fixture that starts a Docker database container.
+
+    The container image is chosen based on the wrapper class under test: a PostgreSQL image for
+    the ``PostgreSQL`` wrapper and a MySQL image for the ``MySQL`` wrapper. The started container
+    is yielded to the test and removed on teardown.
+    """
+
+    @pytest.fixture(scope="session")
+    def db_container():
+        client = docker.from_env()
+        if db_class.__name__ == "PostgreSQL":
+            image = "postgres:16"
+            container_port = f"{settings.MYSQL_TCP_PORT}/tcp"
+            environment = {
+                "POSTGRES_DB": settings.MYSQL_DATABASE,
+                "POSTGRES_USER": settings.INSTALLER_USERID,
+                "POSTGRES_PASSWORD": settings.INSTALLER_PWD,
+            }
+        else:
+            image = "mysql:8"
+            container_port = f"{settings.MYSQL_TCP_PORT}/tcp"
+            environment = {
+                "MYSQL_DATABASE": settings.MYSQL_DATABASE,
+                "MYSQL_ROOT_PASSWORD": settings.MYSQL_ROOT_PASSWORD,
+            }
+        try:
+            existing = client.containers.get("DevTestContainer")
+            existing.remove(force=True)
+        except docker.errors.NotFound:
+            pass
+        container = client.containers.run(
+            image,
+            environment=environment,
+            ports={container_port: ("127.0.0.1", settings.MYSQL_TCP_PORT)},
+            detach=True,
+            name="DevTestContainer",
+        )
+        try:
+            _wait_for_db_container(container)
+            yield container
+        finally:
+            container.stop()
+            container.remove()
+
+    return db_container

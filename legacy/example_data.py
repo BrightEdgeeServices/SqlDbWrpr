@@ -1,7 +1,7 @@
 import datetime
 from pathlib import Path
 
-TEST_DATA_DIR = Path(__file__).resolve().parents[1] / "TestData"
+TEST_DATA_DIR = Path(__file__).resolve().parents[1] / "test_data"
 
 COUNTRY_ROWS = [
     ("CHN", "China"),

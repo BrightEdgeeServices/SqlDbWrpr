@@ -548,40 +548,28 @@ class SQLDbWrpr:
         return success
 
     def create_users(self, p_admin_user, p_new_users):
-        """Create MySQL users that do not already exist."""
-        c_user_name = 0
-        self.cur.execute("SELECT User, Host FROM mysql.user")
-        curr_users = self.cur.fetchall()
-        for user in p_new_users:
-            if not user[c_user_name] in curr_users:
-                try:
-                    self.cur.execute(
-                        "CREATE USER IF NOT EXISTS '{}'@'{}' IDENTIFIED BY '{}'".format(
-                            user[0], self.host_name, user[1]
-                        )
-                    )
-                except self.db_error as err:
-                    self._print_err_msg(err, "Could not create user")
-                    self.close()
-                    sys.exit()
-            self.conn.commit()
-        self.success = True
+        """Create database users.
+
+        Concrete database backends must implement this because user management
+        SQL differs between databases.
+        """
+        raise NotImplementedError(f"{self.__class__.__name__} must implement create_users()")
 
     def delete_users(self, p_admin_user, p_del_users):
-        c_user_name = 0
-        # c_password = 1
-        c_host = 2
-        self.cur.execute("SELECT User FROM mysql.user")
-        curr_users = [x[0] for x in self.cur.fetchall()]
-        for user in p_del_users:
-            if user[c_user_name] in curr_users:
-                try:
-                    self.cur.execute(f"DROP USER '{user[c_user_name]}'@'{user[c_host]}'")
-                except self.db_error as err:
-                    self._print_err_msg(err, "Could not delete user")
-                    self.close()
-                    sys.exit()
-        self.success = True
+        """Delete database users.
+
+        Concrete database backends must implement this because user management
+        SQL differs between databases.
+        """
+        raise NotImplementedError(f"{self.__class__.__name__} must implement delete_users()")
+
+    def grant_rights(self, p_admin_user, p_user_rights):
+        """Grant database rights.
+
+        Concrete database backends must implement this because privilege syntax
+        differs between databases.
+        """
+        raise NotImplementedError(f"{self.__class__.__name__} must implement grant_rights()")
 
     def _err_broken_rec(self, p_sql_str, p_csv_db_slice):
         """Write broken record to logger"""
@@ -767,41 +755,6 @@ class SQLDbWrpr:
                     self.char_fields[p_table_name].append(field)
                 else:
                     self.non_char_fields[p_table_name].append(field)
-
-    def grant_rights(self, p_admin_user, p_user_rights):
-        """Grant configured MySQL rights to users."""
-        c_user_name = 0
-        # c_password = 1
-        c_host = 1
-        c_db = 2
-        c_table = 3
-        c_rights = 4
-        # success = True
-        for right in p_user_rights:
-            try:
-                sql_str = "GRANT {} ON {}.{} TO '{}'@'{}'".format(
-                    ",".join(right[c_rights:]),
-                    right[c_db],
-                    right[c_table],
-                    right[c_user_name],
-                    right[c_host],
-                )
-                self.cur.execute(sql_str)
-                self.conn.commit()
-                sql_str = "GRANT {} ON {}.{} TO '{}'@'{}' WITH GRANT OPTION".format(
-                    ",".join(right[c_rights:]),
-                    right[c_db],
-                    right[c_table],
-                    right[c_user_name],
-                    right[c_host],
-                )
-                self.cur.execute(sql_str)
-                self.conn.commit()
-            except self.db_error as err:
-                self._print_err_msg(err)
-                self.close()
-                sys.exit()
-        self.success = True
 
     def import_csv(
         self,
@@ -1532,6 +1485,77 @@ class MySQL(SQLDbWrpr):
         self.success = True
         pass
 
+    def create_users(self, p_admin_user, p_new_users):
+        """Create MySQL users that do not already exist."""
+        c_user_name = 0
+        self.cur.execute("SELECT User, Host FROM mysql.user")
+        curr_users = self.cur.fetchall()
+        for user in p_new_users:
+            user_key = (user[c_user_name], self.host_name)
+            if user_key not in curr_users:
+                try:
+                    self.cur.execute(
+                        "CREATE USER IF NOT EXISTS '{}'@'{}' IDENTIFIED BY '{}'".format(
+                            user[0], self.host_name, user[1]
+                        )
+                    )
+                except self.db_error as err:
+                    self._print_err_msg(err, "Could not create user")
+                    self.close()
+                    sys.exit()
+                self.conn.commit()
+        self.success = True
+
+    def delete_users(self, p_admin_user, p_del_users):
+        """Delete MySQL users that exist."""
+        c_user_name = 0
+        c_host = 2
+        self.cur.execute("SELECT User FROM mysql.user")
+        curr_users = [x[0] for x in self.cur.fetchall()]
+        for user in p_del_users:
+            if user[c_user_name] in curr_users:
+                try:
+                    self.cur.execute(f"DROP USER '{user[c_user_name]}'@'{user[c_host]}'")
+                except self.db_error as err:
+                    self._print_err_msg(err, "Could not delete user")
+                    self.close()
+                    sys.exit()
+                self.conn.commit()
+        self.success = True
+
+    def grant_rights(self, p_admin_user, p_user_rights):
+        """Grant configured MySQL rights to users."""
+        c_user_name = 0
+        c_host = 1
+        c_db = 2
+        c_table = 3
+        c_rights = 4
+        for right in p_user_rights:
+            try:
+                sql_str = "GRANT {} ON {}.{} TO '{}'@'{}'".format(
+                    ",".join(right[c_rights:]),
+                    right[c_db],
+                    right[c_table],
+                    right[c_user_name],
+                    right[c_host],
+                )
+                self.cur.execute(sql_str)
+                self.conn.commit()
+                sql_str = "GRANT {} ON {}.{} TO '{}'@'{}' WITH GRANT OPTION".format(
+                    ",".join(right[c_rights:]),
+                    right[c_db],
+                    right[c_table],
+                    right[c_user_name],
+                    right[c_host],
+                )
+                self.cur.execute(sql_str)
+                self.conn.commit()
+            except self.db_error as err:
+                self._print_err_msg(err)
+                self.close()
+                sys.exit()
+        self.success = True
+
 
 class PostgreSQL(SQLDbWrpr):
     """Wrapper for PostgreSQL databases."""
@@ -1695,3 +1719,79 @@ class PostgreSQL(SQLDbWrpr):
             port=self.db_port,
             **self._connection_kwargs,
         )
+
+    def create_users(self, p_admin_user, p_new_users):
+        """Create PostgreSQL login roles that do not already exist."""
+        c_user_name = 0
+        c_password = 1
+
+        self.cur.execute("SELECT rolname FROM pg_roles WHERE rolcanlogin = true")
+        curr_users = [row[0] for row in self.cur.fetchall()]
+
+        for user in p_new_users:
+            user_name = user[c_user_name]
+            password = user[c_password]
+
+            if user_name not in curr_users:
+                try:
+                    self.cur.execute(
+                        f"CREATE USER {self.quote_identifier(user_name)} WITH PASSWORD %s",
+                        (password,),
+                    )
+                except self.db_error as err:
+                    self._print_err_msg(err, "Could not create user")
+                    self.close()
+                    sys.exit()
+        self.success = True
+
+    def delete_users(self, p_admin_user, p_del_users):
+        """Delete PostgreSQL users that exist."""
+        c_user_name = 0
+
+        self.cur.execute("SELECT rolname FROM pg_roles")
+        curr_users = [row[0] for row in self.cur.fetchall()]
+
+        for user in p_del_users:
+            user_name = user[c_user_name]
+
+            if user_name in curr_users:
+                try:
+                    self.cur.execute(f"DROP USER {self.quote_identifier(user_name)}")
+                except self.db_error as err:
+                    self._print_err_msg(err, "Could not delete user")
+                    self.close()
+                    sys.exit()
+        self.success = True
+
+    def grant_rights(self, p_admin_user, p_user_rights):
+        """Grant configured PostgreSQL rights to users.
+
+        Expected right format:
+        [user_name, host, database, table, right1, right2, ...]
+        The host value is ignored because PostgreSQL does not grant privileges
+        by user/host pair like MySQL.
+        """
+        c_user_name = 0
+        c_db = 2
+        c_table = 3
+        c_rights = 4
+
+        for right in p_user_rights:
+            try:
+                rights_sql = ",".join(right[c_rights:])
+                user_sql = self.quote_identifier(right[c_user_name])
+                db_sql = self.quote_identifier(right[c_db])
+                table_sql = self.quote_identifier(right[c_table])
+
+                if right[c_table] == "*":
+                    sql_str = f"GRANT {rights_sql} ON DATABASE {db_sql} TO {user_sql}"
+                else:
+                    sql_str = f"GRANT {rights_sql} ON TABLE {table_sql} TO {user_sql}"
+
+                self.cur.execute(sql_str)
+                self.conn.commit()
+            except self.db_error as err:
+                self._print_err_msg(err)
+                self.close()
+                sys.exit()
+        self.success = True
