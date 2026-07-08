@@ -196,6 +196,98 @@ class TestSQLDbWrpr:
         finally:
             pg_db.close()
 
+    def test_create_db_creates_postgresql_database(self, postgresql_container):
+        """PostgreSQL.create_db creates a database using PostgreSQL infrastructure."""
+        pg_db = PostgreSQL(
+            p_host_name=settings.MYSQL_HOST,
+            p_user_name=settings.INSTALLER_USERID,
+            p_password=settings.INSTALLER_PWD,
+            p_db_name=settings.MYSQL_DATABASE,
+            p_db_port=str(settings.MYSQL_TCP_PORT),
+            p_db_structure=DB_STRUCTURE,
+        )
+        db_name = "sqldbwrpr_create_db_positive"
+        try:
+            pg_db.db_name = db_name
+
+            assert pg_db.create_db() is True
+
+            pg_db.cur.execute("SELECT current_database()")
+            assert pg_db.cur.fetchone() == (db_name,)
+        finally:
+            pg_db.close()
+            maintenance_db = PostgreSQL(
+                p_host_name=settings.MYSQL_HOST,
+                p_user_name=settings.INSTALLER_USERID,
+                p_password=settings.INSTALLER_PWD,
+                p_db_name=settings.MYSQL_DATABASE,
+                p_db_port=str(settings.MYSQL_TCP_PORT),
+                p_db_structure=DB_STRUCTURE,
+            )
+            try:
+                maintenance_db.cur.execute(f'DROP DATABASE IF EXISTS "{db_name}" WITH (FORCE)')
+            finally:
+                maintenance_db.close()
+
+    def test_create_tables_creates_postgresql_tables(self, postgresql_container):
+        """SQLDbWrpr.create_tables creates schema tables using PostgreSQL infrastructure."""
+        table_name = "BuildTablePositive"
+        db_structure = {
+            table_name: {
+                "Id": {
+                    "Type": ["int"],
+                    "Params": {
+                        "AI": "Y",
+                        "DEF": "",
+                        "FKey": [],
+                        "Index": [],
+                        "NN": "Y",
+                        "PrimaryKey": ["Y", "A"],
+                    },
+                    "Comment": "Identifier",
+                },
+                "Name": {
+                    "Type": ["varchar", 30],
+                    "Params": {
+                        "AI": "",
+                        "DEF": "",
+                        "FKey": [],
+                        "Index": [],
+                        "NN": "Y",
+                        "PrimaryKey": ["", ""],
+                    },
+                    "Comment": "Name",
+                },
+            }
+        }
+        pg_db = PostgreSQL(
+            p_host_name=settings.MYSQL_HOST,
+            p_user_name=settings.INSTALLER_USERID,
+            p_password=settings.INSTALLER_PWD,
+            p_db_name=settings.MYSQL_DATABASE,
+            p_db_port=str(settings.MYSQL_TCP_PORT),
+            p_db_structure=db_structure,
+        )
+        try:
+            pg_db.cur.execute(f'DROP TABLE IF EXISTS "{table_name}" CASCADE')
+
+            assert SQLDbWrpr.create_tables(pg_db) is True
+
+            pg_db.cur.execute(
+                """
+                SELECT table_name
+                FROM information_schema.tables
+                WHERE table_schema = 'public'
+                    AND table_name = %s
+                """,
+                (table_name,),
+            )
+            assert pg_db.cur.fetchone() == (table_name,)
+            assert pg_db.table_load_order == [table_name]
+        finally:
+            pg_db.cur.execute(f'DROP TABLE IF EXISTS "{table_name}" CASCADE')
+            pg_db.close()
+
     def test_param_placeholder_returns_percent_s(self, postgresql_container):
         """SQLDbWrpr.param_placeholder returns the DB-API placeholder using PostgreSQL infrastructure."""
         pg_db = PostgreSQL(
@@ -244,6 +336,43 @@ class TestSQLDbWrpr:
             quoted_identifiers = SQLDbWrpr.quote_identifier_list(pg_db, ["Surname", "Name", 'Member"Id'])
 
             assert quoted_identifiers == '"Surname","Name","Member""Id"'
+        finally:
+            pg_db.close()
+
+    def test_render_default_sql_builds_varchar_default_sql(self, postgresql_container):
+        """SQLDbWrpr.render_default_sql builds positive default SQL using PostgreSQL infrastructure."""
+        pg_db = PostgreSQL(
+            p_host_name=settings.MYSQL_HOST,
+            p_user_name=settings.INSTALLER_USERID,
+            p_password=settings.INSTALLER_PWD,
+            p_db_name=settings.MYSQL_DATABASE,
+            p_db_port=str(settings.MYSQL_TCP_PORT),
+            p_db_structure=DB_STRUCTURE,
+        )
+        try:
+            default_sql = SQLDbWrpr.render_default_sql(pg_db, ["varchar", 20], "Active")
+
+            assert default_sql == ' DEFAULT "Active"'
+        finally:
+            pg_db.close()
+
+    def test_render_field_type_builds_decimal_field_type(self, postgresql_container):
+        """SQLDbWrpr.render_field_type builds positive field type SQL using PostgreSQL infrastructure."""
+        pg_db = PostgreSQL(
+            p_host_name=settings.MYSQL_HOST,
+            p_user_name=settings.INSTALLER_USERID,
+            p_password=settings.INSTALLER_PWD,
+            p_db_name=settings.MYSQL_DATABASE,
+            p_db_port=str(settings.MYSQL_TCP_PORT),
+            p_db_structure=DB_STRUCTURE,
+        )
+        field_params = {
+            "AI": "",
+        }
+        try:
+            field_type = SQLDbWrpr.render_field_type(pg_db, ["decimal", 10, 2], field_params)
+
+            assert field_type == "decimal(10, 2)"
         finally:
             pg_db.close()
 
