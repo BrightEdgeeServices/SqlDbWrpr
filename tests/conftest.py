@@ -522,6 +522,34 @@ def _wait_for_mysql_ready(p_timeout=90):
     raise RuntimeError(f"MySQL server did not become ready within {p_timeout} seconds: {last_error}")
 
 
+def _wait_for_postgres_ready(p_timeout=90):
+    """Poll the PostgreSQL server until it accepts a connection or the timeout expires.
+
+    A running container does not mean the PostgreSQL server is ready to serve queries, so this
+    repeatedly attempts a real connection and swallows the transient startup errors until the
+    server responds or the timeout is reached.
+    """
+    import psycopg
+
+    deadline = time.monotonic() + p_timeout
+    last_error = None
+    while time.monotonic() < deadline:
+        try:
+            conn = psycopg.connect(
+                host=settings.MYSQL_HOST,
+                user=settings.INSTALLER_USERID,
+                password=settings.INSTALLER_PWD,
+                dbname=settings.MYSQL_DATABASE,
+                port=settings.MYSQL_TCP_PORT,
+            )
+            conn.close()
+            return
+        except psycopg.Error as err:
+            last_error = err
+            time.sleep(1)
+    raise RuntimeError(f"PostgreSQL server did not become ready within {p_timeout} seconds: {last_error}")
+
+
 def make_db_container_fixture(*, db_class):
     """Return a session-scoped pytest fixture that starts a Docker database container.
 
@@ -533,9 +561,10 @@ def make_db_container_fixture(*, db_class):
     @pytest.fixture(scope="session")
     def db_container():
         client = docker.from_env()
+        container_name = "DevTestContainer"
         if db_class.__name__ == "PostgreSQL":
             image = "postgres:16"
-            container_port = f"{settings.MYSQL_TCP_PORT}/tcp"
+            container_port = "5432/tcp"
             command = None
             environment = {
                 "POSTGRES_DB": settings.MYSQL_DATABASE,
@@ -551,7 +580,7 @@ def make_db_container_fixture(*, db_class):
                 "MYSQL_ROOT_PASSWORD": settings.MYSQL_ROOT_PASSWORD,
             }
         try:
-            existing = client.containers.get("DevTestContainer")
+            existing = client.containers.get(container_name)
             existing.remove(force=True)
         except docker.errors.NotFound:
             pass
@@ -561,15 +590,20 @@ def make_db_container_fixture(*, db_class):
             environment=environment,
             ports={container_port: ("127.0.0.1", settings.MYSQL_TCP_PORT)},
             detach=True,
-            name="DevTestContainer",
+            name=container_name,
         )
         try:
             _wait_for_db_container(container)
-            if db_class.__name__ != "PostgreSQL":
+            if db_class.__name__ == "PostgreSQL":
+                _wait_for_postgres_ready()
+            else:
                 _wait_for_mysql_ready()
             yield container
         finally:
-            container.stop()
-            container.remove()
+            try:
+                container.stop()
+                container.remove()
+            except docker.errors.NotFound:
+                pass
 
     return db_container
