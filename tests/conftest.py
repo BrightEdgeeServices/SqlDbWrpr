@@ -1,295 +1,15 @@
 import time
+from copy import deepcopy
 
 import docker
 import docker.errors
 import pytest
+from beetools.utils import get_tmp_dir
+from beetools.utils import rm_tree
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
 
 load_dotenv()
-
-DB_STRUCTURE = {
-    "member": {
-        "id": {
-            "Type": ["int"],
-            "Params": {
-                "PrimaryKey": ["Y", ""],
-                "FKey": [],
-                "Index": [],
-                "NN": "",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "Y",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Member id created with auto increment",
-        },
-        "surname": {
-            "Type": ["varchar", 45],
-            "Params": {
-                "PrimaryKey": ["Y", "A"],
-                "FKey": [],
-                "Index": [],
-                "NN": "Y",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Surname of member",
-        },
-        "name": {
-            "Type": ["varchar", 30],
-            "Params": {
-                "PrimaryKey": ["Y", "A"],
-                "FKey": [],
-                "Index": [],
-                "NN": "Y",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Name of the member",
-        },
-        "country": {
-            "Type": ["char", 3],
-            "Params": {
-                "PrimaryKey": ["", ""],
-                "FKey": [1, 1, "Country", "Code", "R", "C"],
-                "Index": [2, 2, "A", "U"],
-                "NN": "Y",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Country passport",
-        },
-        "race": {
-            "Type": ["tinyint"],
-            "Params": {
-                "PrimaryKey": ["", ""],
-                "FKey": [],
-                "Index": [],
-                "NN": "Y",
-                "B": "",
-                "UN": "Y",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "1",
-            },
-            "Possible Values": "1=White,2=Black",
-            "Comment": "Race of member",
-        },
-    },
-    "country": {
-        "code": {
-            "Type": ["char", 3],
-            "Params": {
-                "PrimaryKey": ["Y", "D"],
-                "FKey": [],
-                "Index": [],
-                "NN": "Y",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "3 digit country code",
-        },
-        "description": {
-            "Type": ["varchar", 30],
-            "Params": {
-                "PrimaryKey": ["", ""],
-                "FKey": [],
-                "Index": [],
-                "NN": "",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Name of country",
-        },
-    },
-    "rating": {
-        "id": {
-            "Type": ["int"],
-            "Params": {
-                "PrimaryKey": ["Y", ""],
-                "FKey": [],
-                "Index": [],
-                "NN": "",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "Y",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Rating record created with auto increment",
-        },
-        "date": {
-            "Type": ["date"],
-            "Params": {
-                "PrimaryKey": ["Y", "A"],
-                "FKey": [],
-                "Index": [1, 1, "A", "U"],
-                "NN": "Y",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Rate of publication",
-        },
-        "rating": {
-            "Type": ["int"],
-            "Params": {
-                "PrimaryKey": ["", ""],
-                "FKey": [],
-                "Index": [],
-                "NN": "",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Rating of member",
-        },
-        "member_org_id": {
-            "Type": ["int"],
-            "Params": {
-                "PrimaryKey": ["", ""],
-                "FKey": [],
-                "Index": [1, 2, "A", "U"],
-                "NN": "",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Rating of member",
-        },
-    },
-    "organization": {
-        "id": {
-            "Type": ["bigint"],
-            "Params": {
-                "PrimaryKey": ["Y", "D"],
-                "FKey": [],
-                "Index": [1, 1, "A", "U"],
-                "NN": "Y",
-                "B": "",
-                "UN": "Y",
-                "ZF": "",
-                "AI": "Y",
-                "G": "Y",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Organization id auto generated",
-        },
-        "organization_name": {
-            "Type": ["varchar", 20],
-            "Params": {
-                "PrimaryKey": ["", ""],
-                "FKey": [],
-                "Index": [2, 1, "A", ""],
-                "NN": "Y",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Organization name",
-        },
-    },
-    "member_org": {
-        "member_id": {
-            "Type": [
-                "bigint",
-            ],
-            "Params": {
-                "PrimaryKey": ["Y", "D"],
-                "FKey": [],
-                "Index": [],
-                "NN": "Y",
-                "B": "",
-                "UN": "Y",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "OrgId from Organization",
-        },
-        "organization_id": {
-            "Type": [
-                "bigint",
-            ],
-            "Params": {
-                "PrimaryKey": ["Y", "D"],
-                "FKey": [],
-                "Index": [],
-                "NN": "Y",
-                "B": "",
-                "UN": "Y",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "member ==> organization",
-        },
-    },
-}
-TBL_TXT_COUNTRY = """\
-Code;Description
-NOR;Norway
-CHN;China
-USA;United States of America
-"""
-TBL_TUP_COUNTRY = [
-    ("CHN", "China"),
-    ("NOR", "Norway"),
-    ("USA", "United States of America"),
-]
 
 
 class DevAutoSettings(BaseSettings):
@@ -304,11 +24,12 @@ class Settings(BaseSettings):
     INSTALLER_USERID: str = ""
     INSTALLER_PWD: str = ""
     MYSQL_HOST: str = ""
-    MYSQL_TCP_PORT: int = "3306"
+    MYSQL_TCP_PORT: int = 00
     MYSQL_DATABASE: str = ""
     MYSQL_PWD: str = ""
     MYSQL_ROOT_PASSWORD: str = ""
-    VENV_ENVIRONMENT: str = "prod"
+    PROJECT_NAME: str = ""
+    VENV_ENVIRONMENT: str = ""
 
 
 dev_auto_settings = DevAutoSettings()
@@ -380,6 +101,56 @@ def _wait_for_postgres_ready(p_timeout=90):
             last_error = err
             time.sleep(1)
     raise RuntimeError(f"PostgreSQL server did not become ready within {p_timeout} seconds: {last_error}")
+
+
+@pytest.fixture
+def reset_db_structure_tables():
+    """Drop and recreate every table configured in a wrapper db_structure."""
+
+    def normalize_db_structure(p_db):
+        """Return a create_tables-safe copy of a legacy db_structure."""
+        db_structure = deepcopy(p_db.db_structure)
+        lower_table_names = {table_name.lower(): table_name for table_name in db_structure}
+        for table_name, table in db_structure.items():
+            for field in table.values():
+                params = field["Params"]
+                if params["PrimaryKey"][0] == "Y" and not params["PrimaryKey"][1]:
+                    params["PrimaryKey"][1] = "A"
+                if params["FKey"]:
+                    ref_table = params["FKey"][2]
+                    if ref_table not in db_structure and ref_table.lower() in lower_table_names:
+                        params["FKey"][2] = lower_table_names[ref_table.lower()]
+                    ref_table = params["FKey"][2]
+                    ref_field = params["FKey"][3]
+                    if ref_table in db_structure and ref_field not in db_structure[ref_table]:
+                        lower_field_names = {field_name.lower(): field_name for field_name in db_structure[ref_table]}
+                        if ref_field.lower() in lower_field_names:
+                            params["FKey"][3] = lower_field_names[ref_field.lower()]
+        return db_structure
+
+    def reset_tables(p_db):
+        """Drop and recreate every table configured for p_db."""
+        p_db.db_structure = normalize_db_structure(p_db)
+        table_names = list(p_db.db_structure)
+        if p_db.__class__.__name__ == "MySQL":
+            p_db.cur.execute("SET FOREIGN_KEY_CHECKS = 0")
+            for table_name in reversed(table_names):
+                p_db.cur.execute(f"DROP TABLE IF EXISTS {p_db.quote_identifier(table_name)}")
+            p_db.cur.execute("SET FOREIGN_KEY_CHECKS = 1")
+            p_db.conn.commit()
+        else:
+            for table_name in reversed(table_names):
+                p_db.cur.execute(f"DROP TABLE IF EXISTS {p_db.quote_identifier(table_name)} CASCADE")
+        return p_db.create_tables()
+
+    return reset_tables
+
+
+@pytest.fixture
+def working_dir():
+    d = get_tmp_dir(settings.PROJECT_NAME)
+    yield d
+    rm_tree(d, p_crash=False)
 
 
 def make_db_container_fixture(*, db_class):

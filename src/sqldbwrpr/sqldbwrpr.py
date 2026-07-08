@@ -591,11 +591,11 @@ class SQLDbWrpr:
         """Export a table to a csv file
 
         Parameters
-        - p_csv_path         - Path name of the file to be exported
-        - p_table_name = ''  - Table name to export
-        - p_delimeter = '|'  - Field delimiter to use
+        - p_csv_path - Path name of the file to be exported
+        - p_table_name = '' - Table name to export
+        - p_delimeter = '|' - Field delimiter to use
         - p_strip_chars = '' - characters to strip from text
-        - p__vol_size = 0    - Create a multiple volume export. p__vol_size is
+        - p__vol_size = 0 - Create a multiple-volume export. p__vol_size is
                              the number of records per file.  0 will create
                              only one volume.
         """

@@ -1,9 +1,12 @@
 from sqldbwrpr.sqldbwrpr import MySQL
 from sqldbwrpr.sqldbwrpr import PostgreSQL
 from sqldbwrpr.sqldbwrpr import SQLDbWrpr
-from tests.conftest import DB_STRUCTURE
 from tests.conftest import make_db_container_fixture
 from tests.conftest import settings
+from tests.test_data.fixture_data import DB_STRUCTURE
+from tests.test_data.fixture_data import res_member
+from tests.test_data.fixture_data import src_members
+from tests.test_data.fixture_data import TBL_TUP_COUNTRY
 
 mysql_container = make_db_container_fixture(db_class=MySQL)
 postgresql_container = make_db_container_fixture(db_class=PostgreSQL)
@@ -286,6 +289,62 @@ class TestSQLDbWrpr:
             assert pg_db.table_load_order == [table_name]
         finally:
             pg_db.cur.execute(f'DROP TABLE IF EXISTS "{table_name}" CASCADE')
+            pg_db.close()
+
+    def test_export_to_csv_exports_member_table(self, postgresql_container, reset_db_structure_tables, working_dir):
+        """SQLDbWrpr.export_to_csv exports populated member rows using PostgreSQL infrastructure."""
+        table_name = "member"
+        pg_db = PostgreSQL(
+            p_host_name=settings.MYSQL_HOST,
+            p_user_name=settings.INSTALLER_USERID,
+            p_password=settings.INSTALLER_PWD,
+            p_db_name=settings.MYSQL_DATABASE,
+            p_db_port=str(settings.MYSQL_TCP_PORT),
+            p_db_structure=DB_STRUCTURE,
+        )
+        export_path = working_dir / "member.csv"
+        try:
+            reset_db_structure_tables(pg_db)
+            pg_db.import_csv(
+                "country",
+                p_csv_db=[("code", "description")] + TBL_TUP_COUNTRY,
+                p_header=("code", "description"),
+            )
+            pg_db.import_csv(
+                table_name,
+                p_csv_db=src_members,
+                p_header=src_members[0],
+            )
+
+            exported_files = SQLDbWrpr.export_to_csv(pg_db, str(export_path), table_name)
+
+            assert exported_files == [(str(working_dir), "member.csv")]
+            assert export_path.read_text() == res_member
+        finally:
+            pg_db.cur.execute(f'DROP TABLE IF EXISTS "{table_name}" CASCADE')
+            pg_db.close()
+
+    def test_get_db_field_types_populates_field_type_maps(self, postgresql_container):
+        """SQLDbWrpr.get_db_field_types populates char and non-char field maps."""
+        pg_db = PostgreSQL(
+            p_host_name=settings.MYSQL_HOST,
+            p_user_name=settings.INSTALLER_USERID,
+            p_password=settings.INSTALLER_PWD,
+            p_db_name=settings.MYSQL_DATABASE,
+            p_db_port=str(settings.MYSQL_TCP_PORT),
+            p_db_structure=DB_STRUCTURE,
+        )
+        try:
+            pg_db.char_fields = {}
+            pg_db.non_char_fields = {}
+
+            SQLDbWrpr.get_db_field_types(pg_db)
+
+            assert pg_db.char_fields["member"] == ["surname", "name", "country"]
+            assert pg_db.non_char_fields["member"] == ["id", "race"]
+            assert pg_db.char_fields["country"] == ["code", "description"]
+            assert pg_db.non_char_fields["rating"] == ["id", "date", "rating", "member_org_id"]
+        finally:
             pg_db.close()
 
     def test_param_placeholder_returns_percent_s(self, postgresql_container):
