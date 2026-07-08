@@ -230,6 +230,23 @@ class TestSQLDbWrpr:
         finally:
             pg_db.close()
 
+    def test_quote_identifier_list_quotes_identifier_list(self, postgresql_container):
+        """SQLDbWrpr.quote_identifier_list quotes identifier lists using PostgreSQL infrastructure."""
+        pg_db = PostgreSQL(
+            p_host_name=settings.MYSQL_HOST,
+            p_user_name=settings.INSTALLER_USERID,
+            p_password=settings.INSTALLER_PWD,
+            p_db_name=settings.MYSQL_DATABASE,
+            p_db_port=str(settings.MYSQL_TCP_PORT),
+            p_db_structure=DB_STRUCTURE,
+        )
+        try:
+            quoted_identifiers = SQLDbWrpr.quote_identifier_list(pg_db, ["Surname", "Name", 'Member"Id'])
+
+            assert quoted_identifiers == '"Surname","Name","Member""Id"'
+        finally:
+            pg_db.close()
+
 
 class TestPostgreSQL:
     def test_create_users_creates_missing_user(self, postgresql_container):
