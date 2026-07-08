@@ -1,5 +1,6 @@
 from sqldbwrpr.sqldbwrpr import MySQL
 from sqldbwrpr.sqldbwrpr import PostgreSQL
+from sqldbwrpr.sqldbwrpr import SQLDbWrpr
 from tests.conftest import DB_STRUCTURE
 from tests.conftest import make_db_container_fixture
 from tests.conftest import settings
@@ -118,6 +119,38 @@ class TestMySQL:
             assert my_db.cur is not None
         finally:
             my_db.close()
+
+
+class TestSQLDbWrpr:
+    def test_build_column_sql_builds_varchar_column_sql(self, postgresql_container):
+        """SQLDbWrpr.build_column_sql builds positive column SQL using PostgreSQL infrastructure."""
+        pg_db = PostgreSQL(
+            p_host_name=settings.MYSQL_HOST,
+            p_user_name=settings.INSTALLER_USERID,
+            p_password=settings.INSTALLER_PWD,
+            p_db_name=settings.MYSQL_DATABASE,
+            p_db_port=str(settings.MYSQL_TCP_PORT),
+            p_db_structure=DB_STRUCTURE,
+        )
+        field_params = {
+            "AI": "",
+            "DEF": "Active",
+            "NN": "Y",
+            "UN": "",
+            "ZF": "",
+        }
+        try:
+            column_sql = SQLDbWrpr.build_column_sql(
+                pg_db,
+                "Status",
+                ["varchar", 20],
+                field_params,
+                "Current status",
+            )
+
+            assert column_sql == '"Status" VARCHAR(20) NOT NULL DEFAULT \'Active\' COMMENT "Current status"'
+        finally:
+            pg_db.close()
 
 
 class TestPostgreSQL:

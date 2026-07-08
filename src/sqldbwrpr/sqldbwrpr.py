@@ -19,13 +19,6 @@ from beetools import msg as bm
 from mysql.connector import errorcode
 from psycopg import sql as psycopg_sql
 
-# from pathlib import Path
-
-
-# _PROJ_DESC = __doc__.split("\n")[0]
-# _PROJ_PATH = Path(__file__)
-# _PROJ_NAME = _PROJ_PATH.stem
-
 
 class SchemaSourceError(ValueError):
     """Raised when no supported database schema source is supplied."""
@@ -53,7 +46,7 @@ class SQLDbWrpr:
         p_ssl_key=None,
         p_ssl_cert=None,
     ):
-        """Initialize common wrapper state and resolve the database schema.
+        """Initialise a common wrapper state and resolve the database schema.
 
         A legacy `p_db_structure` dictionary takes precedence. If it is not
         supplied, SQLAlchemy metadata is read from `p_sqlalchemy_metadata` or

@@ -9,95 +9,25 @@ from pydantic_settings import BaseSettings
 load_dotenv()
 
 DB_STRUCTURE = {
-    "Rating": {
-        "Date": {
-            "Type": ["date"],
-            "Params": {
-                "PrimaryKey": ["Y", "A"],
-                "FKey": [],
-                "Index": [1, 1, "A", "U"],
-                "NN": "Y",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Rate of publication",
-        },
-        "Name": {
-            "Type": ["varchar", 30],
-            "Params": {
-                "PrimaryKey": ["Y", "A"],
-                "FKey": [1, 2, "Member", "Name", "C", "C"],
-                "Index": [],
-                "NN": "Y",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Name from Member",
-        },
-        "Surname": {
-            "Type": ["varchar", 45],
-            "Params": {
-                "PrimaryKey": ["Y", "A"],
-                "FKey": [1, 1, "Member", "Surname", "C", "C"],
-                "Index": [],
-                "NN": "Y",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Surname from Member",
-        },
-        "Rating": {
+    "member": {
+        "id": {
             "Type": ["int"],
             "Params": {
-                "PrimaryKey": ["", ""],
+                "PrimaryKey": ["Y", ""],
                 "FKey": [],
                 "Index": [],
                 "NN": "",
                 "B": "",
                 "UN": "",
                 "ZF": "",
-                "AI": "",
+                "AI": "Y",
                 "G": "",
                 "DEF": "",
             },
             "Possible Values": "",
-            "Comment": "Rating of member",
+            "Comment": "Member id created with auto increment",
         },
-        "OrgMemberId": {
-            "Type": ["int"],
-            "Params": {
-                "PrimaryKey": ["", ""],
-                "FKey": [],
-                "Index": [1, 2, "A", "U"],
-                "NN": "",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Rating of member",
-        },
-    },
-    "Member": {
-        "Surname": {
+        "surname": {
             "Type": ["varchar", 45],
             "Params": {
                 "PrimaryKey": ["Y", "A"],
@@ -114,7 +44,7 @@ DB_STRUCTURE = {
             "Possible Values": "",
             "Comment": "Surname of member",
         },
-        "Name": {
+        "name": {
             "Type": ["varchar", 30],
             "Params": {
                 "PrimaryKey": ["Y", "A"],
@@ -131,24 +61,7 @@ DB_STRUCTURE = {
             "Possible Values": "",
             "Comment": "Name of the member",
         },
-        "SosSec": {
-            "Type": ["varchar", 10],
-            "Params": {
-                "PrimaryKey": ["", ""],
-                "FKey": [],
-                "Index": [1, 1, "D", "U"],
-                "NN": "Y",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Social security nr filled with zeros",
-        },
-        "Country": {
+        "country": {
             "Type": ["char", 3],
             "Params": {
                 "PrimaryKey": ["", ""],
@@ -165,24 +78,7 @@ DB_STRUCTURE = {
             "Possible Values": "",
             "Comment": "Country passport",
         },
-        "PassportNr": {
-            "Type": ["char", 15],
-            "Params": {
-                "PrimaryKey": ["", ""],
-                "FKey": [],
-                "Index": [2, 1, "D", "U"],
-                "NN": "Y",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Passport number",
-        },
-        "Race": {
+        "race": {
             "Type": ["tinyint"],
             "Params": {
                 "PrimaryKey": ["", ""],
@@ -199,94 +95,9 @@ DB_STRUCTURE = {
             "Possible Values": "1=White,2=Black",
             "Comment": "Race of member",
         },
-        "RegDateTime": {
-            "Type": ["datetime"],
-            "Params": {
-                "PrimaryKey": ["", ""],
-                "FKey": [],
-                "Index": [3, 1, "D", "U"],
-                "NN": "",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Registration date",
-        },
-        "Picture": {
-            "Type": ["blob"],
-            "Params": {
-                "PrimaryKey": ["", ""],
-                "FKey": [],
-                "Index": [],
-                "NN": "",
-                "B": "Y",
-                "UN": "",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Photo of member",
-        },
-        "ActiveStatus": {
-            "Type": ["boolean"],
-            "Params": {
-                "PrimaryKey": ["", ""],
-                "FKey": [],
-                "Index": [],
-                "NN": "",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Active | Inactive",
-        },
-        "BirthYear": {
-            "Type": ["int"],
-            "Params": {
-                "PrimaryKey": ["", ""],
-                "FKey": [],
-                "Index": [],
-                "NN": "",
-                "B": "",
-                "UN": "Y",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Birth year of member",
-        },
-        "DOB": {
-            "Type": ["date"],
-            "Params": {
-                "PrimaryKey": ["", ""],
-                "FKey": [],
-                "Index": [],
-                "NN": "",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Date of Birth",
-        },
     },
-    "Country": {
-        "Code": {
+    "country": {
+        "code": {
             "Type": ["char", 3],
             "Params": {
                 "PrimaryKey": ["Y", "D"],
@@ -303,7 +114,7 @@ DB_STRUCTURE = {
             "Possible Values": "",
             "Comment": "3 digit country code",
         },
-        "Description": {
+        "description": {
             "Type": ["varchar", 30],
             "Params": {
                 "PrimaryKey": ["", ""],
@@ -321,8 +132,78 @@ DB_STRUCTURE = {
             "Comment": "Name of country",
         },
     },
-    "Organization": {
-        "OrgId": {
+    "rating": {
+        "id": {
+            "Type": ["int"],
+            "Params": {
+                "PrimaryKey": ["Y", ""],
+                "FKey": [],
+                "Index": [],
+                "NN": "",
+                "B": "",
+                "UN": "",
+                "ZF": "",
+                "AI": "Y",
+                "G": "",
+                "DEF": "",
+            },
+            "Possible Values": "",
+            "Comment": "Rating record created with auto increment",
+        },
+        "date": {
+            "Type": ["date"],
+            "Params": {
+                "PrimaryKey": ["Y", "A"],
+                "FKey": [],
+                "Index": [1, 1, "A", "U"],
+                "NN": "Y",
+                "B": "",
+                "UN": "",
+                "ZF": "",
+                "AI": "",
+                "G": "",
+                "DEF": "",
+            },
+            "Possible Values": "",
+            "Comment": "Rate of publication",
+        },
+        "rating": {
+            "Type": ["int"],
+            "Params": {
+                "PrimaryKey": ["", ""],
+                "FKey": [],
+                "Index": [],
+                "NN": "",
+                "B": "",
+                "UN": "",
+                "ZF": "",
+                "AI": "",
+                "G": "",
+                "DEF": "",
+            },
+            "Possible Values": "",
+            "Comment": "Rating of member",
+        },
+        "member_org_id": {
+            "Type": ["int"],
+            "Params": {
+                "PrimaryKey": ["", ""],
+                "FKey": [],
+                "Index": [1, 2, "A", "U"],
+                "NN": "",
+                "B": "",
+                "UN": "",
+                "ZF": "",
+                "AI": "",
+                "G": "",
+                "DEF": "",
+            },
+            "Possible Values": "",
+            "Comment": "Rating of member",
+        },
+    },
+    "organization": {
+        "id": {
             "Type": ["bigint"],
             "Params": {
                 "PrimaryKey": ["Y", "D"],
@@ -339,7 +220,7 @@ DB_STRUCTURE = {
             "Possible Values": "",
             "Comment": "Organization id auto generated",
         },
-        "OrgName": {
+        "organization_name": {
             "Type": ["varchar", 20],
             "Params": {
                 "PrimaryKey": ["", ""],
@@ -356,77 +237,9 @@ DB_STRUCTURE = {
             "Possible Values": "",
             "Comment": "Organization name",
         },
-        "RegFee": {
-            "Type": ["decimal", 5, 2],
-            "Params": {
-                "PrimaryKey": ["", ""],
-                "FKey": [],
-                "Index": [],
-                "NN": "",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Registration fee",
-        },
-        "OpenTrading": {
-            "Type": ["time"],
-            "Params": {
-                "PrimaryKey": ["", ""],
-                "FKey": [],
-                "Index": [],
-                "NN": "",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Opening time for trading",
-        },
     },
-    "MemberOrg": {
-        "Surname": {
-            "Type": ["varchar", 45],
-            "Params": {
-                "PrimaryKey": ["Y", "A"],
-                "FKey": [],
-                "Index": [],
-                "NN": "Y",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Surname from Member",
-        },
-        "Name": {
-            "Type": ["varchar", 30],
-            "Params": {
-                "PrimaryKey": ["Y", "A"],
-                "FKey": [],
-                "Index": [],
-                "NN": "Y",
-                "B": "",
-                "UN": "",
-                "ZF": "",
-                "AI": "",
-                "G": "",
-                "DEF": "",
-            },
-            "Possible Values": "",
-            "Comment": "Name from Member",
-        },
-        "OrgId": {
+    "member_org": {
+        "member_id": {
             "Type": [
                 "bigint",
             ],
@@ -444,6 +257,25 @@ DB_STRUCTURE = {
             },
             "Possible Values": "",
             "Comment": "OrgId from Organization",
+        },
+        "organization_id": {
+            "Type": [
+                "bigint",
+            ],
+            "Params": {
+                "PrimaryKey": ["Y", "D"],
+                "FKey": [],
+                "Index": [],
+                "NN": "Y",
+                "B": "",
+                "UN": "Y",
+                "ZF": "",
+                "AI": "",
+                "G": "",
+                "DEF": "",
+            },
+            "Possible Values": "",
+            "Comment": "member ==> organization",
         },
     },
 }
