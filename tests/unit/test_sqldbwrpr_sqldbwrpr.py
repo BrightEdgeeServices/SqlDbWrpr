@@ -70,6 +70,39 @@ class TestMySQL:
             my_db.conn.commit()
             my_db.close()
 
+    def test_grant_rights_grants_database_right_to_user(self, mysql_container):
+        """MySQL.grant_rights grants a database right to an existing user."""
+        my_db = MySQL(
+            p_host_name=settings.MYSQL_HOST,
+            p_user_name="root",
+            p_password=settings.MYSQL_ROOT_PASSWORD,
+            p_db_name=settings.MYSQL_DATABASE,
+            p_db_port=str(settings.MYSQL_TCP_PORT),
+            p_db_structure=DB_STRUCTURE,
+        )
+        user_host = settings.MYSQL_HOST
+        user_name = "grant_rights_positive_user"
+        user_password = "GrantRightsPositivePwd1!"
+        try:
+            my_db.cur.execute(f"DROP USER IF EXISTS '{user_name}'@'{user_host}'")
+            my_db.conn.commit()
+            my_db.create_users(["root", settings.MYSQL_ROOT_PASSWORD], [[user_name, user_password]])
+
+            my_db.grant_rights(
+                ["root", settings.MYSQL_ROOT_PASSWORD],
+                [[user_name, user_host, settings.MYSQL_DATABASE, "*", "SELECT"]],
+            )
+
+            my_db.cur.execute(f"SHOW GRANTS FOR '{user_name}'@'{user_host}'")
+            grants = [row[0] for row in my_db.cur.fetchall()]
+            assert any(f"ON `{settings.MYSQL_DATABASE}`.*" in grant and "SELECT" in grant for grant in grants)
+            assert any("WITH GRANT OPTION" in grant for grant in grants)
+            assert my_db.success is True
+        finally:
+            my_db.cur.execute(f"DROP USER IF EXISTS '{user_name}'@'{user_host}'")
+            my_db.conn.commit()
+            my_db.close()
+
     def test_init_dict_structure(self, mysql_container):
         """MySQL.__init__ connects to the containerised database and opens a live cursor."""
         my_db = MySQL(
@@ -140,6 +173,41 @@ class TestPostgreSQL:
             assert pg_db.cur.fetchone() is None
             assert pg_db.success is True
         finally:
+            pg_db.cur.execute(f'DROP USER IF EXISTS "{user_name}"')
+            pg_db.close()
+
+    def test_grant_rights_grants_database_right_to_user(self, postgresql_container):
+        """PostgreSQL.grant_rights grants a database right to an existing login role."""
+        pg_db = PostgreSQL(
+            p_host_name=settings.MYSQL_HOST,
+            p_user_name=settings.INSTALLER_USERID,
+            p_password=settings.INSTALLER_PWD,
+            p_db_name=settings.MYSQL_DATABASE,
+            p_db_port=str(settings.MYSQL_TCP_PORT),
+            p_db_structure=DB_STRUCTURE,
+        )
+        user_name = "grant_rights_positive_user"
+        user_password = "GrantRightsPositivePwd1!"
+        try:
+            pg_db.cur.execute(f'DROP USER IF EXISTS "{user_name}"')
+            pg_db.create_users(
+                [settings.INSTALLER_USERID, settings.INSTALLER_PWD],
+                [[user_name, user_password]],
+            )
+
+            pg_db.grant_rights(
+                [settings.INSTALLER_USERID, settings.INSTALLER_PWD],
+                [[user_name, settings.MYSQL_HOST, settings.MYSQL_DATABASE, "*", "CREATE"]],
+            )
+
+            pg_db.cur.execute(
+                "SELECT has_database_privilege(%s, %s, 'CREATE')",
+                (user_name, settings.MYSQL_DATABASE),
+            )
+            assert pg_db.cur.fetchone() == (True,)
+            assert pg_db.success is True
+        finally:
+            pg_db.cur.execute(f'REVOKE CREATE ON DATABASE "{settings.MYSQL_DATABASE}" FROM "{user_name}"')
             pg_db.cur.execute(f'DROP USER IF EXISTS "{user_name}"')
             pg_db.close()
 
