@@ -175,6 +175,27 @@ class TestSQLDbWrpr:
         finally:
             pg_db.close()
 
+    def test_build_insert_sql_builds_insert_sql(self, postgresql_container):
+        """SQLDbWrpr.build_insert_sql builds positive insert SQL using PostgreSQL infrastructure."""
+        pg_db = PostgreSQL(
+            p_host_name=settings.MYSQL_HOST,
+            p_user_name=settings.INSTALLER_USERID,
+            p_password=settings.INSTALLER_PWD,
+            p_db_name=settings.MYSQL_DATABASE,
+            p_db_port=str(settings.MYSQL_TCP_PORT),
+            p_db_structure=DB_STRUCTURE,
+        )
+        try:
+            insert_sql = SQLDbWrpr.build_insert_sql(
+                pg_db,
+                "Member",
+                ["Surname", "Name", "OrgMemberId"],
+            )
+
+            assert insert_sql == 'INSERT INTO "Member" ("Surname","Name","OrgMemberId") VALUES (%s,%s,%s)'
+        finally:
+            pg_db.close()
+
 
 class TestPostgreSQL:
     def test_create_users_creates_missing_user(self, postgresql_container):
