@@ -1,6 +1,7 @@
 import time
 
 import docker
+import docker.errors
 import pytest
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
@@ -483,7 +484,7 @@ settings = Settings()
 
 
 def _wait_for_db_container(p_container, p_timeout=60):
-    """Poll the container status until it reports healthy or the timeout expires."""
+    """Poll the container status until it reports running or the timeout expires."""
     deadline = time.monotonic() + p_timeout
     while time.monotonic() < deadline:
         p_container.reload()
@@ -491,6 +492,34 @@ def _wait_for_db_container(p_container, p_timeout=60):
             return
         time.sleep(1)
     raise RuntimeError(f"Database container {p_container.name!r} did not start within {p_timeout} seconds")
+
+
+def _wait_for_mysql_ready(p_timeout=90):
+    """Poll the MySQL server until it accepts a connection or the timeout expires.
+
+    A running container does not mean the MySQL server is ready to serve queries, so this
+    repeatedly attempts a real connection and swallows the transient startup errors (e.g. error
+    2013 "Lost connection during query") until the server responds or the timeout is reached.
+    """
+    import mysql.connector
+
+    deadline = time.monotonic() + p_timeout
+    last_error = None
+    while time.monotonic() < deadline:
+        try:
+            conn = mysql.connector.connect(
+                host=settings.MYSQL_HOST,
+                user="root",
+                password=settings.MYSQL_ROOT_PASSWORD,
+                port=settings.MYSQL_TCP_PORT,
+                auth_plugin="mysql_native_password",
+            )
+            conn.close()
+            return
+        except mysql.connector.Error as err:
+            last_error = err
+            time.sleep(1)
+    raise RuntimeError(f"MySQL server did not become ready within {p_timeout} seconds: {last_error}")
 
 
 def make_db_container_fixture(*, db_class):
@@ -514,7 +543,7 @@ def make_db_container_fixture(*, db_class):
             }
         else:
             image = "mysql:8"
-            container_port = f"{settings.MYSQL_TCP_PORT}/tcp"
+            container_port = "3306/tcp"
             environment = {
                 "MYSQL_DATABASE": settings.MYSQL_DATABASE,
                 "MYSQL_ROOT_PASSWORD": settings.MYSQL_ROOT_PASSWORD,
@@ -533,6 +562,8 @@ def make_db_container_fixture(*, db_class):
         )
         try:
             _wait_for_db_container(container)
+            if db_class.__name__ != "PostgreSQL":
+                _wait_for_mysql_ready()
             yield container
         finally:
             container.stop()
