@@ -5,6 +5,7 @@ from sqlalchemy import Column
 from sqlalchemy import Date
 from sqlalchemy import DateTime
 from sqlalchemy import ForeignKey
+from sqlalchemy import ForeignKeyConstraint
 from sqlalchemy import Index
 from sqlalchemy import Integer
 from sqlalchemy import JSON
@@ -220,6 +221,54 @@ class TestSQLDbWrpr:
         legacy_types = [SQLDbWrpr._column_type_to_legacy(column) for column, expected in column_type_cases]
 
         assert legacy_types == [expected for column, expected in column_type_cases]
+
+    def test_set_foreign_keys_sets_legacy_foreign_key_metadata(self):
+        """SQLDbWrpr._set_foreign_keys sets legacy foreign-key metadata on child fields."""
+        metadata = MetaData()
+        parent = Table(
+            "parent",
+            metadata,
+            Column("id", Integer, primary_key=True),
+            Column("code", String(3), primary_key=True),
+        )
+        child = Table(
+            "child",
+            metadata,
+            Column("parent_id", Integer),
+            Column("parent_code", String(3)),
+            ForeignKeyConstraint(
+                ["parent_id", "parent_code"],
+                [parent.c.id, parent.c.code],
+                ondelete="CASCADE",
+                onupdate="SET NULL",
+            ),
+        )
+        table_structure = {column.name: SQLDbWrpr._column_to_legacy_field(column) for column in child.columns}
+
+        SQLDbWrpr._set_foreign_keys(child, table_structure)
+
+        assert table_structure["parent_id"]["Params"]["FKey"] == [1, 1, "parent", "id", "C", "N"]
+        assert table_structure["parent_code"]["Params"]["FKey"] == [1, 2, "parent", "code", "C", "N"]
+
+    def test_set_indexes_sets_legacy_index_metadata(self):
+        """SQLDbWrpr._set_indexes sets legacy index metadata on indexed fields."""
+        metadata = MetaData()
+        member = Table(
+            "member",
+            metadata,
+            Column("surname", String(30)),
+            Column("name", String(30)),
+            Column("country", String(3)),
+        )
+        Index("idx_member_country", member.c.country)
+        Index("idx_member_name", member.c.surname, member.c.name, unique=True)
+        table_structure = {column.name: SQLDbWrpr._column_to_legacy_field(column) for column in member.columns}
+
+        SQLDbWrpr._set_indexes(member, table_structure)
+
+        assert table_structure["country"]["Params"]["Index"] == [1, 1, "A", ""]
+        assert table_structure["surname"]["Params"]["Index"] == [2, 1, "A", "U"]
+        assert table_structure["name"]["Params"]["Index"] == [2, 2, "A", "U"]
 
     def test_build_default_field_params_builds_legacy_field_defaults(self):
         """SQLDbWrpr._build_default_field_params builds the legacy field parameter defaults."""
