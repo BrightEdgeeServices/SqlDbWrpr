@@ -163,6 +163,42 @@ class TestSQLDbWrpr:
 
         assert legacy_codes == action_map
 
+    def test_column_to_legacy_field_builds_legacy_field_definition(self):
+        """SQLDbWrpr._column_to_legacy_field builds legacy field definitions from SQLAlchemy columns."""
+        id_column = Column("id", Integer, primary_key=True, autoincrement=True, comment="Identifier")
+        name_column = Column("name", String(30), nullable=False, default="Active")
+        picture_column = Column("picture", LargeBinary)
+
+        id_field = SQLDbWrpr._column_to_legacy_field(id_column)
+        name_field = SQLDbWrpr._column_to_legacy_field(name_column)
+        picture_field = SQLDbWrpr._column_to_legacy_field(picture_column)
+
+        assert id_field == {
+            "Type": ["int"],
+            "Params": {
+                "PrimaryKey": ["", ""],
+                "FKey": [],
+                "Index": [],
+                "NN": "Y",
+                "B": "",
+                "UN": "",
+                "ZF": "",
+                "AI": "Y",
+                "G": "",
+                "DEF": "",
+            },
+            "Possible Values": "",
+            "Comment": "Identifier",
+        }
+        assert name_field["Type"] == ["varchar", 30]
+        assert name_field["Params"]["NN"] == "Y"
+        assert name_field["Params"]["DEF"] == "Active"
+        assert name_field["Comment"] == ""
+        assert picture_field["Type"] == ["blob"]
+        assert picture_field["Params"]["B"] == "Y"
+        assert picture_field["Params"]["NN"] == ""
+        assert picture_field["Possible Values"] == ""
+
     def test_column_type_to_legacy_maps_sqlalchemy_column_types(self):
         """SQLDbWrpr._column_type_to_legacy maps SQLAlchemy column types to legacy field types."""
         column_type_cases = [
