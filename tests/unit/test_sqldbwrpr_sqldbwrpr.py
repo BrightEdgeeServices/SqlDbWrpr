@@ -4,9 +4,14 @@ from sqldbwrpr.sqldbwrpr import SQLDbWrpr
 from tests.conftest import make_db_container_fixture
 from tests.conftest import settings
 from tests.test_data.fixture_data import DB_STRUCTURE
-from tests.test_data.fixture_data import res_member
+from tests.test_data.fixture_data import res_member_delimited_pipe
+from tests.test_data.fixture_data import res_member_split
+from tests.test_data.fixture_data import res_member_tuple
+from tests.test_data.fixture_data import split_struct_member
 from tests.test_data.fixture_data import src_members
+from tests.test_data.fixture_data import src_split_file_members
 from tests.test_data.fixture_data import TBL_TUP_COUNTRY
+from tests.test_data.fixture_data import TBL_TUP_ORGANIZATION
 
 mysql_container = make_db_container_fixture(db_class=MySQL)
 postgresql_container = make_db_container_fixture(db_class=PostgreSQL)
@@ -307,7 +312,7 @@ class TestSQLDbWrpr:
             reset_db_structure_tables(pg_db)
             pg_db.import_csv(
                 "country",
-                p_csv_db=[("code", "description")] + TBL_TUP_COUNTRY,
+                p_csv_db=TBL_TUP_COUNTRY,
                 p_header=("code", "description"),
             )
             pg_db.import_csv(
@@ -319,9 +324,191 @@ class TestSQLDbWrpr:
             exported_files = SQLDbWrpr.export_to_csv(pg_db, str(export_path), table_name)
 
             assert exported_files == [(str(working_dir), "member.csv")]
-            assert export_path.read_text() == res_member
+            assert export_path.read_text() == res_member_delimited_pipe
         finally:
-            pg_db.cur.execute(f'DROP TABLE IF EXISTS "{table_name}" CASCADE')
+            pg_db.close()
+
+    def test_import_and_split_csv(self, postgresql_container, reset_db_structure_tables):
+        """SQLDbWrpr.import_csv imports member rows using PostgreSQL infrastructure."""
+        pg_db = PostgreSQL(
+            p_host_name=settings.MYSQL_HOST,
+            p_user_name=settings.INSTALLER_USERID,
+            p_password=settings.INSTALLER_PWD,
+            p_db_name=settings.MYSQL_DATABASE,
+            p_db_port=str(settings.MYSQL_TCP_PORT),
+            p_db_structure=DB_STRUCTURE,
+        )
+        try:
+            reset_db_structure_tables(pg_db)
+            pg_db.import_csv(
+                "country",
+                p_csv_db=TBL_TUP_COUNTRY,
+                p_header=("code", "description"),
+            )
+            pg_db.import_and_split_csv(
+                split_struct_member,
+                src_split_file_members,
+            )
+
+            pg_db.cur.execute(
+                'SELECT "id", "surname", "name", "sos_sec", "picture", "country", "race" FROM "member" ORDER BY "id"'
+            )
+            assert pg_db.cur.fetchall() == res_member_split
+        finally:
+            pg_db.close()
+
+    def test_import_and_split_csv_with_auto_increment_in_new_table(
+        self, postgresql_container, reset_db_structure_tables
+    ):
+        """SQLDbWrpr.import_csv imports member rows using PostgreSQL infrastructure."""
+        pg_db = PostgreSQL(
+            p_host_name=settings.MYSQL_HOST,
+            p_user_name=settings.INSTALLER_USERID,
+            p_password=settings.INSTALLER_PWD,
+            p_db_name=settings.MYSQL_DATABASE,
+            p_db_port=str(settings.MYSQL_TCP_PORT),
+            p_db_structure=DB_STRUCTURE,
+        )
+        try:
+            reset_db_structure_tables(pg_db)
+            pg_db.import_csv(
+                "country",
+                p_csv_db=TBL_TUP_COUNTRY,
+            )
+            pg_db.import_csv(
+                "organization",
+                p_csv_db=TBL_TUP_ORGANIZATION,
+            )
+            pg_db.import_and_split_csv(
+                split_struct_member,
+                src_split_file_members,
+            )
+            pg_db.cur.execute(
+                'SELECT "id" FROM "organization" WHERE "organization_name" = %s',
+                ("St Louis Chess Club",),
+            )
+            stlcc_id = pg_db.cur.fetchall()[0][0]
+            pg_db.cur.execute(
+                'SELECT "id" FROM "organization" WHERE "organization_name" = %s',
+                ("Boondocs Chess Club",),
+            )
+            boondocs_id = pg_db.cur.fetchall()[0][0]
+
+            surname_name_tuple = tuple(
+                tuple(part.strip() for part in row[0].split(",", 1)) for row in src_split_file_members[1:]
+            )
+            values_sql = ",".join(["(%s, %s)" for row in surname_name_tuple])
+            surname_name_params = tuple(part for row in surname_name_tuple for part in row)
+            pg_db.cur.execute(
+                f"""SELECT m.id, m.surname, m.name
+                FROM (VALUES {values_sql}) AS sn(surname, name)
+                JOIN member AS m
+                  ON m.surname = sn.surname AND m.name = sn.name""",
+                surname_name_params,
+            )
+            surname_name_ids = [("id", "surname", "name")] + pg_db.cur.fetchall()
+            split_struct_02 = {
+                "Seq01": {
+                    "TableName": "member_org",
+                    "Key": "id",
+                    "Replace": True,
+                    "Flds": [
+                        [
+                            "None",
+                            "id",
+                            [6, 1, False],
+                        ],
+                        [
+                            "id",
+                            "member_id",
+                            [
+                                0,
+                                0,
+                                True,
+                                [
+                                    [],
+                                ],
+                            ],
+                        ],
+                        ["None", "organization_id", [1, stlcc_id, False]],
+                    ],
+                },
+                "Seq02": {
+                    "TableName": "member_org",
+                    "Key": "id",
+                    "Replace": True,
+                    "Flds": [
+                        [
+                            "None",
+                            "id",
+                            [6, 1, False],
+                        ],
+                        [
+                            "id",
+                            "member_id",
+                            [
+                                0,
+                                0,
+                                True,
+                                [
+                                    [],
+                                ],
+                            ],
+                        ],
+                        ["None", "organization_id", [1, boondocs_id, False]],
+                    ],
+                },
+            }
+            pg_db.import_and_split_csv(
+                split_struct_02,
+                surname_name_ids,
+            )
+
+            pg_db.cur.execute(
+                'SELECT "id", "surname", "name", "sos_sec", "picture", "country", "race" FROM "member" ORDER BY "id"'
+            )
+            assert pg_db.cur.fetchall() == res_member_split
+            pg_db.cur.execute(
+                'SELECT "id", "member_id", "organization_id" FROM "member_org" ORDER BY "organization_id", "member_id"'
+            )
+            assert pg_db.cur.fetchall() == [
+                (1, 1, stlcc_id),
+                (2, 2, stlcc_id),
+                (3, 3, stlcc_id),
+                (1, 1, boondocs_id),
+                (2, 2, boondocs_id),
+                (3, 3, boondocs_id),
+            ]
+        finally:
+            pg_db.close()
+
+    def test_import_csv_imports_member_rows(self, postgresql_container, reset_db_structure_tables):
+        """SQLDbWrpr.import_csv imports member rows using PostgreSQL infrastructure."""
+        pg_db = PostgreSQL(
+            p_host_name=settings.MYSQL_HOST,
+            p_user_name=settings.INSTALLER_USERID,
+            p_password=settings.INSTALLER_PWD,
+            p_db_name=settings.MYSQL_DATABASE,
+            p_db_port=str(settings.MYSQL_TCP_PORT),
+            p_db_structure=DB_STRUCTURE,
+        )
+        try:
+            reset_db_structure_tables(pg_db)
+            pg_db.import_csv(
+                "country",
+                p_csv_db=TBL_TUP_COUNTRY,
+                p_header=("code", "description"),
+            )
+
+            pg_db.import_csv(
+                "member",
+                p_csv_db=src_members,
+                p_header=src_members[0],
+            )
+
+            pg_db.cur.execute('SELECT "surname", "name", "sos_sec", "country", "race" FROM "member" ORDER BY "id"')
+            assert pg_db.cur.fetchall() == res_member_tuple
+        finally:
             pg_db.close()
 
     def test_get_db_field_types_populates_field_type_maps(self, postgresql_container):
@@ -340,8 +527,8 @@ class TestSQLDbWrpr:
 
             SQLDbWrpr.get_db_field_types(pg_db)
 
-            assert pg_db.char_fields["member"] == ["surname", "name", "country"]
-            assert pg_db.non_char_fields["member"] == ["id", "race"]
+            assert pg_db.char_fields["member"] == ["surname", "name", "sos_sec", "country"]
+            assert pg_db.non_char_fields["member"] == ["id", "picture", "race"]
             assert pg_db.char_fields["country"] == ["code", "description"]
             assert pg_db.non_char_fields["rating"] == ["id", "date", "rating", "member_org_id"]
         finally:

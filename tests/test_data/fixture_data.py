@@ -3,10 +3,10 @@ DB_STRUCTURE = {
         "id": {
             "Type": ["int"],
             "Params": {
-                "PrimaryKey": ["Y", ""],
+                "PrimaryKey": ["Y", "A"],
                 "FKey": [],
                 "Index": [],
-                "NN": "",
+                "NN": "Y",
                 "B": "",
                 "UN": "",
                 "ZF": "",
@@ -20,7 +20,7 @@ DB_STRUCTURE = {
         "surname": {
             "Type": ["varchar", 45],
             "Params": {
-                "PrimaryKey": ["Y", "A"],
+                "PrimaryKey": ["", ""],
                 "FKey": [],
                 "Index": [],
                 "NN": "Y",
@@ -37,7 +37,7 @@ DB_STRUCTURE = {
         "name": {
             "Type": ["varchar", 30],
             "Params": {
-                "PrimaryKey": ["Y", "A"],
+                "PrimaryKey": ["", ""],
                 "FKey": [],
                 "Index": [],
                 "NN": "Y",
@@ -50,6 +50,40 @@ DB_STRUCTURE = {
             },
             "Possible Values": "",
             "Comment": "Name of the member",
+        },
+        "sos_sec": {
+            "Type": ["varchar", 10],
+            "Params": {
+                "PrimaryKey": ["", ""],
+                "FKey": [],
+                "Index": [1, 1, "D", "U"],
+                "NN": "Y",
+                "B": "",
+                "UN": "",
+                "ZF": "",
+                "AI": "",
+                "G": "",
+                "DEF": "",
+            },
+            "Possible Values": "",
+            "Comment": "Social security nr filled with zeros",
+        },
+        "picture": {
+            "Type": ["blob"],
+            "Params": {
+                "PrimaryKey": ["", ""],
+                "FKey": [],
+                "Index": [],
+                "NN": "",
+                "B": "Y",
+                "UN": "",
+                "ZF": "",
+                "AI": "",
+                "G": "",
+                "DEF": "",
+            },
+            "Possible Values": "",
+            "Comment": "Photo of member",
         },
         "country": {
             "Type": ["char", 3],
@@ -229,6 +263,23 @@ DB_STRUCTURE = {
         },
     },
     "member_org": {
+        "id": {
+            "Type": ["int"],
+            "Params": {
+                "PrimaryKey": ["Y", "A"],
+                "FKey": [],
+                "Index": [],
+                "NN": "Y",
+                "B": "",
+                "UN": "",
+                "ZF": "",
+                "AI": "Y",
+                "G": "",
+                "DEF": "",
+            },
+            "Possible Values": "",
+            "Comment": "Member id created with auto increment",
+        },
         "member_id": {
             "Type": [
                 "bigint",
@@ -269,6 +320,7 @@ DB_STRUCTURE = {
         },
     },
 }
+TBL_DICT_RACE = {"Asian": 1, "Black": 2, "White": 5}
 TBL_TXT_COUNTRY = """\
 Code;Description
 NOR;Norway
@@ -276,33 +328,144 @@ CHN;China
 USA;United States of America
 """
 TBL_TUP_COUNTRY = [
+    ("code", "description"),
     ("CHN", "China"),
     ("NOR", "Norway"),
     ("USA", "United States of America"),
 ]
+TBL_TUP_ORGANIZATION = [
+    ("organization_name",),
+    ("St Louis Chess Club",),
+    ("Boondocs Chess Club",),
+    ("Ice Cold Chess Club",),
+]
 
-res_member = (
-    "id|surname|name|country|race\n" "1|Carlsen|Magnus|NOR|5\n" "2|Ding|Liren|CHN|1\n" "3|Nakamura|Hikaru|USA|5\n"
+res_member_delimited_pipe = (
+    "id|surname|name|sos_sec|picture|country|race\n"
+    "1|Carlsen|Magnus|A123456781|NULL|NOR|5\n"
+    "2|Ding|Liren|B123456782|NULL|CHN|1\n"
+    "3|Nakamura|Hikaru|C123456783|NULL|USA|5\n"
 )
 
+res_member_tuple = [
+    ("Carlsen", "Magnus", "A123456781", "NOR", 5),
+    ("Ding", "Liren", "B123456782", "CHN", 1),
+    ("Nakamura", "Hikaru", "C123456783", "USA", 5),
+]
+
+res_member_split = [
+    (1, "So", "Wesley", "A123456784", None, "USA", 5),
+    (2, "Caruana", "Fabiano", "B123456785", None, "CHN", 1),
+    (3, "Keymer", "Vincent", "C123456786", None, "NOR", 5),
+]
+
+split_struct_member = {
+    "Seq01": {
+        "TableName": "member",
+        "Key": "id",
+        "Replace": False,
+        "Flds": [
+            ["SurnameName", "surname", [2, 0, True]],
+            ["SurnameName", "name", [2, 1, True]],
+            [
+                "IDNr",
+                "sos_sec",
+                [
+                    0,
+                    0,
+                    True,
+                    [
+                        [],
+                    ],
+                ],
+            ],
+            ["Picture", "picture", [1, None, False]],
+            ["Country", "country", [0, 0, True, [["", None], "CHN"]]],
+            ["Race", "race", [4, TBL_DICT_RACE, True]],
+        ],
+    },
+}
+
 src_members = [
-    ("surname", "name", "country", "race"),
+    ("surname", "name", "sos_sec", "country", "race"),
     (
         "Carlsen",
         "Magnus",
+        "A123456781",
         "NOR",
         "5",
     ),
     (
         "Ding",
         "Liren",
+        "B123456782",
         "CHN",
         "1",
     ),
     (
         "Nakamura",
         "Hikaru",
+        "C123456783",
         "USA",
         "5",
+    ),
+]
+src_split_file_members = [
+    (
+        "SurnameName",
+        "IDNr",
+        "Country",
+        "PassportNr",
+        "Race",
+        "Picture",
+        "ActiveStatus",
+        "OrgId",
+        "OrgName",
+        "RegFee",
+        "OpenTrading",
+        "BirthYear",
+    ),
+    (
+        "So, Wesley",
+        "A123456784",
+        "USA",
+        "AB12CD34",
+        "White",
+        "NULL",
+        "1",
+        "6",
+        "Ice Cold Chess Club",
+        "20",
+        "8:00:00",
+        "1990",
+    ),
+    (
+        "Caruana, Fabiano",
+        "B123456785",
+        "CHN",
+        "CD56EF78",
+        "Asian",
+        "NULL",
+        "1",
+        "St Louis Chess Club",
+        "100",
+        "0",
+        "9:00:00",
+        "2000",
+    ),
+    (
+        "Keymer, Vincent",
+        "C123456786",
+        "NOR",
+        "EF90GH12",
+        "White",
+        "NULL",
+        "0",
+        "3",
+        "St Louis Chess Club",
+        "100",
+        "0",
+        "9:00:00",
+        "1980",
     ),
 ]

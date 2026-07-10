@@ -178,18 +178,7 @@ def do_tests(p_app_path='', p_cls=True):
                     'Flds': [
                         ['SurnameName', 'Surname', [2, 0, True]],
                         ['SurnameName', 'Name', [2, 1, True]],
-                        [
-                            'IDNr',
-                            'SosSec',
-                            [
-                                0,
-                                0,
-                                True,
-                                [
-                                    [],
-                                ],
-                            ],
-                        ],
+                        ['IDNr','SosSec', [0, 0, True,[[],],],],
                         ['Country', 'Country', [0, 0, True, [['', None], 'CHN']]],
                         ['None', 'PassportNr', [6, 100, True]],
                         ['Race', 'Race', [4, look_up_tbl, True]],
