@@ -90,7 +90,7 @@ DB_STRUCTURE = {
             "Params": {
                 "PrimaryKey": ["", ""],
                 "FKey": [1, 1, "Country", "Code", "R", "C"],
-                "Index": [2, 2, "A", "U"],
+                "Index": [],
                 "NN": "Y",
                 "B": "",
                 "UN": "",
@@ -354,10 +354,21 @@ res_member_tuple = [
 ]
 
 res_member_split = [
+    (1, "Carlsen", "Magnus", "A123456781", None, "NOR", 5),
+    (2, "Ding", "Liren", "B123456782", None, "CHN", 1),
+    (3, "Nakamura", "Hikaru", "C123456783", None, "USA", 5),
+    (4, "So", "Wesley", "A123456784", None, "USA", 5),
+    (5, "Caruana", "Fabiano", "B123456785", None, "CHN", 1),
+    (6, "Keymer", "Vincent", "C123456786", None, "NOR", 5),
+]
+
+res_member_split_only = [
     (1, "So", "Wesley", "A123456784", None, "USA", 5),
     (2, "Caruana", "Fabiano", "B123456785", None, "CHN", 1),
     (3, "Keymer", "Vincent", "C123456786", None, "NOR", 5),
 ]
+
+res_member_org_split = [(1, 4, 1), (2, 5, 1), (3, 6, 1), (1, 4, 2), (2, 5, 2), (3, 6, 2)]
 
 split_struct_member = {
     "Seq01": {

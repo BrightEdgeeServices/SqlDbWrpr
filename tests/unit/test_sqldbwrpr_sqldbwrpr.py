@@ -1,3 +1,12 @@
+from sqlalchemy import Column
+from sqlalchemy import ForeignKey
+from sqlalchemy import Index
+from sqlalchemy import Integer
+from sqlalchemy import MetaData
+from sqlalchemy import Numeric
+from sqlalchemy import String
+from sqlalchemy import Table
+
 from sqldbwrpr.sqldbwrpr import MySQL
 from sqldbwrpr.sqldbwrpr import PostgreSQL
 from sqldbwrpr.sqldbwrpr import SQLDbWrpr
@@ -5,7 +14,9 @@ from tests.conftest import make_db_container_fixture
 from tests.conftest import settings
 from tests.test_data.fixture_data import DB_STRUCTURE
 from tests.test_data.fixture_data import res_member_delimited_pipe
+from tests.test_data.fixture_data import res_member_org_split
 from tests.test_data.fixture_data import res_member_split
+from tests.test_data.fixture_data import res_member_split_only
 from tests.test_data.fixture_data import res_member_tuple
 from tests.test_data.fixture_data import split_struct_member
 from tests.test_data.fixture_data import src_members
@@ -328,6 +339,47 @@ class TestSQLDbWrpr:
         finally:
             pg_db.close()
 
+    def test_from_sqlalchemy_metadata_builds_legacy_schema_structure(self):
+        """SQLDbWrpr.from_sqlalchemy_metadata builds a legacy schema from SQLAlchemy metadata."""
+        metadata = MetaData()
+        country = Table(
+            "country",
+            metadata,
+            Column("code", String(3), primary_key=True, comment="Country code"),
+            Column("description", String(30), nullable=False),
+        )
+        member = Table(
+            "member",
+            metadata,
+            Column("id", Integer, primary_key=True, autoincrement=True),
+            Column(
+                "country_code",
+                String(3),
+                ForeignKey(country.c.code, ondelete="CASCADE", onupdate="RESTRICT"),
+                nullable=False,
+            ),
+            Column("name", String(40), nullable=False, comment="Member name"),
+            Column("rating", Numeric(6, 2), default=1500),
+        )
+        Index("idx_member_country_name", member.c.country_code, member.c.name, unique=True)
+
+        db_structure = SQLDbWrpr.from_sqlalchemy_metadata(metadata)
+
+        assert list(db_structure) == ["country", "member"]
+        assert db_structure["country"]["code"]["Type"] == ["varchar", 3]
+        assert db_structure["country"]["code"]["Params"]["PrimaryKey"] == ["Y", "A"]
+        assert db_structure["country"]["code"]["Params"]["NN"] == "Y"
+        assert db_structure["country"]["code"]["Comment"] == "Country code"
+        assert db_structure["member"]["id"]["Type"] == ["int"]
+        assert db_structure["member"]["id"]["Params"]["AI"] == "Y"
+        assert db_structure["member"]["id"]["Params"]["PrimaryKey"] == ["Y", "A"]
+        assert db_structure["member"]["country_code"]["Params"]["FKey"] == [1, 1, "country", "code", "C", "R"]
+        assert db_structure["member"]["country_code"]["Params"]["Index"] == [1, 1, "A", "U"]
+        assert db_structure["member"]["name"]["Params"]["Index"] == [1, 2, "A", "U"]
+        assert db_structure["member"]["name"]["Comment"] == "Member name"
+        assert db_structure["member"]["rating"]["Type"] == ["decimal", 6, 2]
+        assert db_structure["member"]["rating"]["Params"]["DEF"] == "1500"
+
     def test_import_and_split_csv(self, postgresql_container, reset_db_structure_tables):
         """SQLDbWrpr.import_csv imports member rows using PostgreSQL infrastructure."""
         pg_db = PostgreSQL(
@@ -353,7 +405,7 @@ class TestSQLDbWrpr:
             pg_db.cur.execute(
                 'SELECT "id", "surname", "name", "sos_sec", "picture", "country", "race" FROM "member" ORDER BY "id"'
             )
-            assert pg_db.cur.fetchall() == res_member_split
+            assert pg_db.cur.fetchall() == res_member_split_only
         finally:
             pg_db.close()
 
@@ -476,14 +528,7 @@ class TestSQLDbWrpr:
             pg_db.cur.execute(
                 'SELECT "id", "member_id", "organization_id" FROM "member_org" ORDER BY "organization_id", "member_id"'
             )
-            assert pg_db.cur.fetchall() == [
-                (1, 1, stlcc_id),
-                (2, 2, stlcc_id),
-                (3, 3, stlcc_id),
-                (1, 1, boondocs_id),
-                (2, 2, boondocs_id),
-                (3, 3, boondocs_id),
-            ]
+            assert pg_db.cur.fetchall() == res_member_org_split
         finally:
             pg_db.close()
 
