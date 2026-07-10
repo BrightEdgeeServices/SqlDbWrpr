@@ -380,6 +380,31 @@ class TestSQLDbWrpr:
         assert db_structure["member"]["rating"]["Type"] == ["decimal", 6, 2]
         assert db_structure["member"]["rating"]["Params"]["DEF"] == "1500"
 
+    def test_resolve_db_structure_uses_explicit_structure_metadata_and_base(self):
+        """SQLDbWrpr.resolve_db_structure resolves explicit and SQLAlchemy schema sources."""
+        explicit_structure = {"explicit_table": {}}
+        metadata = MetaData()
+        Table(
+            "metadata_table",
+            metadata,
+            Column("id", Integer, primary_key=True),
+            Column("name", String(20), nullable=False),
+        )
+        base = type("SqlAlchemyBaseStub", (), {"metadata": metadata})
+
+        explicit_db_structure = SQLDbWrpr.resolve_db_structure(
+            p_db_structure=explicit_structure,
+            p_sqlalchemy_metadata=metadata,
+        )
+        metadata_db_structure = SQLDbWrpr.resolve_db_structure(p_sqlalchemy_metadata=metadata)
+        base_db_structure = SQLDbWrpr.resolve_db_structure(p_sqlalchemy_base=base)
+
+        assert explicit_db_structure is explicit_structure
+        assert list(metadata_db_structure) == ["metadata_table"]
+        assert metadata_db_structure["metadata_table"]["id"]["Params"]["PrimaryKey"] == ["Y", "A"]
+        assert metadata_db_structure["metadata_table"]["name"]["Type"] == ["varchar", 20]
+        assert base_db_structure == metadata_db_structure
+
     def test_import_and_split_csv(self, postgresql_container, reset_db_structure_tables):
         """SQLDbWrpr.import_csv imports member rows using PostgreSQL infrastructure."""
         pg_db = PostgreSQL(
