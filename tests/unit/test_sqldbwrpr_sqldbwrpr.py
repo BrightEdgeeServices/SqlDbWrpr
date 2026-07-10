@@ -1,11 +1,19 @@
+from sqlalchemy import BigInteger
+from sqlalchemy import Boolean
+from sqlalchemy import CHAR
 from sqlalchemy import Column
+from sqlalchemy import Date
+from sqlalchemy import DateTime
 from sqlalchemy import ForeignKey
 from sqlalchemy import Index
 from sqlalchemy import Integer
+from sqlalchemy import JSON
+from sqlalchemy import LargeBinary
 from sqlalchemy import MetaData
 from sqlalchemy import Numeric
 from sqlalchemy import String
 from sqlalchemy import Table
+from sqlalchemy import Time
 
 from sqldbwrpr.sqldbwrpr import MySQL
 from sqldbwrpr.sqldbwrpr import PostgreSQL
@@ -154,6 +162,28 @@ class TestSQLDbWrpr:
         legacy_codes = {action: SQLDbWrpr._action_to_legacy_code(action) for action in action_map}
 
         assert legacy_codes == action_map
+
+    def test_column_type_to_legacy_maps_sqlalchemy_column_types(self):
+        """SQLDbWrpr._column_type_to_legacy maps SQLAlchemy column types to legacy field types."""
+        column_type_cases = [
+            (Column("big_id", BigInteger), ["bigint"]),
+            (Column("active", Boolean), ["boolean"]),
+            (Column("code", CHAR(3)), ["char", 3]),
+            (Column("created_date", Date), ["date"]),
+            (Column("created_at", DateTime), ["datetime"]),
+            (Column("id", Integer), ["int"]),
+            (Column("payload", LargeBinary), ["blob"]),
+            (Column("amount", Numeric(10, 2)), ["decimal", 10, 2]),
+            (Column("ratio", Numeric), ["decimal"]),
+            (Column("name", String(40)), ["varchar", 40]),
+            (Column("description", String), ["varchar"]),
+            (Column("start_time", Time), ["time"]),
+            (Column("metadata", JSON), ["json"]),
+        ]
+
+        legacy_types = [SQLDbWrpr._column_type_to_legacy(column) for column, expected in column_type_cases]
+
+        assert legacy_types == [expected for column, expected in column_type_cases]
 
     def test_build_default_field_params_builds_legacy_field_defaults(self):
         """SQLDbWrpr._build_default_field_params builds the legacy field parameter defaults."""
