@@ -141,6 +141,41 @@ class TestMySQL:
 
 
 class TestSQLDbWrpr:
+    def test_action_to_legacy_code_maps_sqlalchemy_actions(self):
+        """SQLDbWrpr._action_to_legacy_code maps SQLAlchemy foreign-key actions to legacy codes."""
+        action_map = {
+            None: "N",
+            "CASCADE": "C",
+            "RESTRICT": "R",
+            "SET DEFAULT": "D",
+            "SET NULL": "N",
+        }
+
+        legacy_codes = {action: SQLDbWrpr._action_to_legacy_code(action) for action in action_map}
+
+        assert legacy_codes == action_map
+
+    def test_build_default_field_params_builds_legacy_field_defaults(self):
+        """SQLDbWrpr._build_default_field_params builds the legacy field parameter defaults."""
+        field_params = SQLDbWrpr._build_default_field_params()
+        second_field_params = SQLDbWrpr._build_default_field_params()
+
+        assert field_params == {
+            "PrimaryKey": ["", ""],
+            "FKey": [],
+            "Index": [],
+            "NN": "",
+            "B": "",
+            "UN": "",
+            "ZF": "",
+            "AI": "",
+            "G": "",
+            "DEF": "",
+        }
+        assert field_params["PrimaryKey"] is not second_field_params["PrimaryKey"]
+        assert field_params["FKey"] is not second_field_params["FKey"]
+        assert field_params["Index"] is not second_field_params["Index"]
+
     def test_build_column_sql_builds_varchar_column_sql(self, postgresql_container):
         """SQLDbWrpr.build_column_sql builds positive column SQL using PostgreSQL infrastructure."""
         pg_db = PostgreSQL(
