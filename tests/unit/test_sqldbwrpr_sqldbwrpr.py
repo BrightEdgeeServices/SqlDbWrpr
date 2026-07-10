@@ -379,6 +379,11 @@ class TestSQLDbWrpr:
                 "organization",
                 p_csv_db=TBL_TUP_ORGANIZATION,
             )
+            pg_db.import_csv(
+                "member",
+                p_csv_db=src_members,
+                p_header=src_members[0],
+            )
             pg_db.import_and_split_csv(
                 split_struct_member,
                 src_split_file_members,

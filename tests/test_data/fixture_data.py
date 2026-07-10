@@ -380,7 +380,7 @@ split_struct_member = {
                 ],
             ],
             ["Picture", "picture", [1, None, False]],
-            ["Country", "country", [0, 0, True, [["", None], "CHN"]]],
+            ["Country", "country", [0, True, ""]],
             ["Race", "race", [4, TBL_DICT_RACE, True]],
         ],
     },
