@@ -16,7 +16,7 @@ class DevAutoSettings(BaseSettings):
     DEV_AUTO_OVERRIDE: bool = False
     DEV_DB_ROLLBACK_OVERRIDE: bool = False
     DEV_AUTO_MYSQL_HOST: str = ""
-    DEV_AUTO_MYSQL_TCP_PORT: int = ""
+    DEV_AUTO_MYSQL_TCP_PORT: int = 0
 
 
 class Settings(BaseSettings):
@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     INSTALLER_USERID: str = ""
     INSTALLER_PWD: str = ""
     MYSQL_HOST: str = ""
-    MYSQL_TCP_PORT: int = 00
+    MYSQL_TCP_PORT: int = 0
     MYSQL_DATABASE: str = ""
     MYSQL_PWD: str = ""
     MYSQL_ROOT_PASSWORD: str = ""
