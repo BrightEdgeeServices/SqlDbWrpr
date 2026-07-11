@@ -1,3 +1,28 @@
+# Release 5.1.1
+
+2026-07-11 11:46 UTC+02:00
+
+### Added
+
+- Added `README.md` guidance for running the Docker-backed test suite and documented PostgreSQL role and privilege management.
+
+### Changed
+
+- Bumped the package version in `pyproject.toml` to `5.1.1` for this backward-compatible documentation release.
+
+### Statistics
+
+- **Changed files:** 3
+- **Insertions:** 44
+- **Deletions:** 2
+- **Branch:** hendrik/bee-33-feat-sqldbwrpr-focused-unit-tests
+- **Files changed:**
+  - README.md
+  - ReleaseNotes.md
+  - pyproject.toml
+
+______________________________________________________________________
+
 # Release 5.1.0
 
 2026-06-29 23:22 UTC+02:00

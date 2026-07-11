@@ -6,7 +6,7 @@
 
 [project]
     name = 'SQLDbWrpr'
-    version = '5.1.0'
+    version = '5.1.1'
     description = 'Wrapper for importing CSV and Text files into MySQL and Postgress'
     authors = [
         { name = "Hendrik du Toit", email = "hendrik@brightedge.co.za" }

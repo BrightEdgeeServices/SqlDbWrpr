@@ -29,7 +29,7 @@ When both are supplied, `p_db_structure` takes precedence for backward compatibi
   - Import CSV data from files or in-memory rows, including single-volume and numbered multi-volume files.
   - Export full tables or custom SQL query results to CSV, including optional multi-volume exports.
 - **Database Support**: Includes MySQL and PostgreSQL wrappers with dialect-specific SQL rendering.
-- **User and Permission Management**: Create MySQL users and grant database rights.
+- **User and Permission Management**: Create and delete MySQL users or PostgreSQL login roles, and grant backend-specific database or table rights.
 - **Batch Processing**: Configure import batch sizes for larger CSV loads.
 
 ### Project Structure
@@ -46,6 +46,17 @@ When both are supplied, `p_db_structure` takes precedence for backward compatibi
 ```bash
 pip install SqlDbWrpr
 ```
+
+### Running the Tests
+
+The focused database tests use temporary MySQL 8.0 and PostgreSQL 16 Docker containers. Ensure Docker is running, then install the development dependencies and run the test suite:
+
+```powershell
+poetry install --with dev
+poetry run pytest
+```
+
+The test fixtures wait for each database to become ready and remove the temporary containers after the test session.
 
 ### Quick Start With A Legacy Structure
 
@@ -227,6 +238,12 @@ This section documents the callable API in `src/sqldbwrpr/sqldbwrpr.py`.
   - Builds PostgreSQL `INSERT`; when `p_replace=True`, builds `ON CONFLICT` upsert/no-op behavior from primary-key metadata.
 - `create_db()`
   - PostgreSQL DB recreation flow via `pg_database` lookup, optional forced drop, create, and reconnect.
+- `create_users(p_admin_user, p_new_users)`
+  - Creates PostgreSQL login roles that do not already exist, using the supplied passwords.
+- `delete_users(p_admin_user, p_del_users)`
+  - Drops PostgreSQL roles that currently exist.
+- `grant_rights(p_admin_user, p_user_rights)`
+  - Grants database-level rights when the table target is `*`; otherwise grants table-level rights. PostgreSQL ignores the host field in each rights entry.
 - `render_default_sql(p_field_type, p_default_value)`
   - Renders PostgreSQL defaults with proper escaping for string values.
 - `render_field_type(p_field_type, p_field_params)`
