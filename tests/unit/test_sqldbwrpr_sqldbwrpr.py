@@ -270,6 +270,24 @@ class TestSQLDbWrpr:
         assert table_structure["surname"]["Params"]["Index"] == [2, 1, "A", "U"]
         assert table_structure["name"]["Params"]["Index"] == [2, 2, "A", "U"]
 
+    def test_set_primary_key_sets_legacy_primary_key_metadata(self):
+        """SQLDbWrpr._set_primary_key sets legacy primary-key metadata on key fields."""
+        metadata = MetaData()
+        member = Table(
+            "member",
+            metadata,
+            Column("organization_id", Integer, primary_key=True),
+            Column("member_id", Integer, primary_key=True),
+            Column("status", String(10)),
+        )
+        table_structure = {column.name: SQLDbWrpr._column_to_legacy_field(column) for column in member.columns}
+
+        SQLDbWrpr._set_primary_key(member, table_structure)
+
+        assert table_structure["organization_id"]["Params"]["PrimaryKey"] == ["Y", "A"]
+        assert table_structure["member_id"]["Params"]["PrimaryKey"] == ["Y", "A"]
+        assert table_structure["status"]["Params"]["PrimaryKey"] == ["", ""]
+
     def test_build_default_field_params_builds_legacy_field_defaults(self):
         """SQLDbWrpr._build_default_field_params builds the legacy field parameter defaults."""
         field_params = SQLDbWrpr._build_default_field_params()
