@@ -131,6 +131,109 @@ db = PostgreSQL(
 db.import_csv("Users", p_csv_db=[("Username",), ("alice",)], p_vol_type="Single")
 ```
 
+## Function Reference
+
+This section documents the callable API in `src/sqldbwrpr/sqldbwrpr.py`.
+
+### `SchemaSourceError`
+
+- `SchemaSourceError(ValueError)`: Raised when no usable schema source is provided to initialize a wrapper (`p_db_structure`, `p_sqlalchemy_metadata`, or `p_sqlalchemy_base.metadata`).
+
+### `SQLDbWrpr` (base wrapper)
+
+- `__init__(p_host_name, p_user_name, p_password, p_recreate_db, p_db_name, p_db_structure, p_sqlalchemy_base, p_sqlalchemy_metadata, p_batch_size, p_bar_len, p_msg_width, p_verbose, p_db_port, p_ssl_ca, p_ssl_key, p_ssl_cert)`
+  - Initializes shared wrapper state, resolves schema source, configures import/export behavior, and precomputes char vs non-char field maps.
+  - Schema resolution order: explicit `p_db_structure` first, then SQLAlchemy metadata, else raises `SchemaSourceError`.
+- `close()`
+  - Closes the active DB connection if present.
+- `build_column_sql(p_field_name, p_field_type, p_field_params, p_field_comment)`
+  - Builds the column fragment for `CREATE TABLE` in the active dialect (base implementation is MySQL-oriented).
+  - Applies `AUTO_INCREMENT`, `UNSIGNED`, `NOT NULL`, `ZEROFILL`, defaults, and comments based on field parameters.
+- `build_index_sql(p_table_name, p_idx_name, p_idx_fields, p_unique=False)`
+  - Builds an index clause with sort directions from legacy index metadata.
+- `build_insert_sql(p_table_name, p_header, p_replace=False)`
+  - Builds an `INSERT` or `REPLACE` statement with backend parameter placeholders.
+- `param_placeholder()`
+  - Returns the DB-API parameter token used by execution (`%s`).
+- `quote_identifier(p_identifier)`
+  - Quotes SQL identifiers when a backend quote character is configured; otherwise returns plain identifier text.
+- `quote_identifier_list(p_identifiers)`
+  - Quotes and joins a list of identifiers using commas.
+- `render_default_sql(p_field_type, p_default_value)`
+  - Renders a `DEFAULT` clause, quoting string-like defaults for char/varchar types.
+- `render_field_type(p_field_type, p_field_params)`
+  - Renders legacy type arrays into SQL type declarations (e.g., `varchar(n)`, `decimal(p,s)`).
+- `create_db()`
+  - Base database recreation flow: drops an existing DB and creates/selects a fresh one.
+- `create_tables()`
+  - Validates legacy schema metadata and creates tables, keys, indexes, and constraints in dependency order.
+  - Splits table creation and post-create operations where backend rules require deferred statements.
+- `create_users(p_admin_user, p_new_users)`
+  - Creates MySQL users if they do not already exist.
+- `delete_users(p_admin_user, p_del_users)`
+  - Drops MySQL users that exist in `mysql.user`.
+- `_err_broken_rec(p_sql_str, p_csv_db_slice)`
+  - Retry helper used during imports to isolate/log failing rows and stop on first unrecoverable record.
+- `export_to_csv(p_csv_path, p_table_name, p_delimiter="|", p_strip_chars="", p__vol_size=0, p_sql_query="")`
+  - Exports table/query results to CSV in single-file or multi-volume mode.
+  - Multi-volume mode chunks output by record count and generates numbered files.
+- `get_db_field_types()`
+  - Populates per-table lists of character vs non-character columns for type-sensitive import handling.
+- `grant_rights(p_admin_user, p_user_rights)`
+  - Grants MySQL rights and corresponding grant-option privileges according to supplied rights tuples.
+- `import_csv(p_table_name, p_csv_file_name="", p_key="", p_header="", p_del_head=False, p_csv_db="", p_csv_corr_str_file_name="", p_vol_type="Multi", p_verbose=False, p_replace=False)`
+  - Imports CSV data from file(s) or in-memory rows.
+  - Supports single- and multi-volume input, optional header override/removal, correction-string preprocessing, type conversion, date normalization, and batched insert/replace.
+- `import_and_split_csv(p_split_struct, p_data, p_header="", p_insert_header=False, p_verbose=False, p_debug=False)`
+  - Splits an input dataset into multiple destination table payloads using declarative field mappings and transform commands, then imports each generated dataset.
+- `from_sqlalchemy_metadata(p_sqlalchemy_metadata)` (`@classmethod`)
+  - Converts SQLAlchemy `MetaData` (sorted tables) to the legacy `db_structure` dictionary.
+- `resolve_db_structure(p_db_structure=None, p_sqlalchemy_base=None, p_sqlalchemy_metadata=None)` (`@staticmethod`)
+  - Central schema source resolver used by constructors; raises `SchemaSourceError` when none are provided.
+- `_action_to_legacy_code(p_action)` (`@staticmethod`)
+  - Maps SQLAlchemy FK action text (e.g., `CASCADE`, `SET NULL`) to legacy action codes (`C`, `N`, etc.).
+- `_build_default_field_params()` (`@staticmethod`)
+  - Produces the baseline legacy field-parameter block used during SQLAlchemy conversion.
+- `_column_type_to_legacy(p_column)` (`@staticmethod`)
+  - Converts a SQLAlchemy column type object into the legacy type-array format.
+- `_column_to_legacy_field(p_column)` (`@staticmethod`)
+  - Converts one SQLAlchemy column into a legacy field definition, including nullability, autoincrement, defaults, and comments.
+- `_set_foreign_keys(p_table, p_table_structure)` (`@staticmethod`)
+  - Writes legacy foreign-key metadata onto converted table fields.
+- `_set_indexes(p_table, p_table_structure)` (`@staticmethod`)
+  - Writes legacy index metadata for converted table fields.
+- `_set_primary_key(p_table, p_table_structure)` (`@staticmethod`)
+  - Marks primary-key columns in converted legacy table definitions.
+- `_table_to_legacy_structure(p_table)` (`@staticmethod`)
+  - Converts an entire SQLAlchemy table into a legacy table structure and enriches it with keys/indexes.
+- `_print_err_msg(p_err, p_msg="")` (`@staticmethod`)
+  - Formats and prints database error details before termination paths.
+
+### `MySQL(SQLDbWrpr)`
+
+- `__init__(p_host_name, p_user_name, p_password, p_user_rights, p_recreate_db, p_db_name, p_db_structure, p_sqlalchemy_base, p_sqlalchemy_metadata, p_batch_size, p_bar_len, p_msg_width, p_verbose, p_admin_username, p_admin_user_password, p_db_port, **kwargs)`
+  - Opens a MySQL connection and cursor, optionally recreates database/tables, or selects the configured DB.
+  - Includes fallback logic to create and grant rights to missing users when valid admin credentials and rights data are supplied.
+
+### `PostgreSQL(SQLDbWrpr)`
+
+- `__init__(p_host_name, p_user_name, p_password, p_recreate_db, p_db_name, p_db_structure, p_sqlalchemy_base, p_sqlalchemy_metadata, p_batch_size, p_bar_len, p_msg_width, p_verbose, p_db_port, p_maintenance_db, **kwargs)`
+  - Configures PostgreSQL-specific behavior (quoted identifiers, non-inline indexes), opens connection, and optionally recreates DB/tables.
+- `build_column_sql(p_field_name, p_field_type, p_field_params, p_field_comment)`
+  - PostgreSQL-specific column SQL renderer; handles non-AI `NOT NULL` and defaults.
+- `build_index_sql(p_table_name, p_idx_name, p_idx_fields, p_unique=False)`
+  - Builds PostgreSQL `CREATE INDEX`/`CREATE UNIQUE INDEX` statements.
+- `build_insert_sql(p_table_name, p_header, p_replace=False)`
+  - Builds PostgreSQL `INSERT`; when `p_replace=True`, builds `ON CONFLICT` upsert/no-op behavior from primary-key metadata.
+- `create_db()`
+  - PostgreSQL DB recreation flow via `pg_database` lookup, optional forced drop, create, and reconnect.
+- `render_default_sql(p_field_type, p_default_value)`
+  - Renders PostgreSQL defaults with proper escaping for string values.
+- `render_field_type(p_field_type, p_field_params)`
+  - Maps legacy types to PostgreSQL types, including `SERIAL`/`BIGSERIAL` for autoincrement fields.
+- `_connect(p_db_name)`
+  - Internal connector helper returning a `psycopg` connection for the requested database.
+
 ______________________________________________________________________
 
 ## Updating ReleaseNotes Instructions
