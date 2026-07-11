@@ -320,6 +320,27 @@ class TestSQLDbWrpr:
         assert table_structure["name"]["Params"]["DEF"] == "Active"
         assert table_structure["name"]["Possible Values"] == ""
 
+    def test_print_err_msg_prints_formatted_database_error(self, capsys):
+        """SQLDbWrpr._print_err_msg prints formatted database error details."""
+        error = type(
+            "DatabaseErrorStub",
+            (),
+            {
+                "errno": 1049,
+                "sqlstate": "42000",
+                "msg": "Unknown database",
+            },
+        )()
+
+        SQLDbWrpr._print_err_msg(error, "Create database failed")
+
+        output = capsys.readouterr().out
+        assert "Create database failed" in output
+        assert "Err No:\t\t1049" in output
+        assert "SQL State:\t42000" in output
+        assert "Err Msg:\tUnknown database" in output
+        assert "System terminated..." in output
+
     def test_build_default_field_params_builds_legacy_field_defaults(self):
         """SQLDbWrpr._build_default_field_params builds the legacy field parameter defaults."""
         field_params = SQLDbWrpr._build_default_field_params()
