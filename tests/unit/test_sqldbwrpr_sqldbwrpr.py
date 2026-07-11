@@ -288,6 +288,38 @@ class TestSQLDbWrpr:
         assert table_structure["member_id"]["Params"]["PrimaryKey"] == ["Y", "A"]
         assert table_structure["status"]["Params"]["PrimaryKey"] == ["", ""]
 
+    def test_table_to_legacy_structure_builds_complete_table_structure(self):
+        """SQLDbWrpr._table_to_legacy_structure builds a complete legacy table structure."""
+        metadata = MetaData()
+        country = Table(
+            "country",
+            metadata,
+            Column("code", String(3), primary_key=True),
+        )
+        member = Table(
+            "member",
+            metadata,
+            Column("id", Integer, primary_key=True, autoincrement=True, comment="Identifier"),
+            Column("country_code", String(3), ForeignKey(country.c.code, ondelete="RESTRICT"), nullable=False),
+            Column("name", String(30), nullable=False, default="Active"),
+        )
+        Index("idx_member_country_name", member.c.country_code, member.c.name, unique=True)
+
+        table_structure = SQLDbWrpr._table_to_legacy_structure(member)
+
+        assert list(table_structure) == ["id", "country_code", "name"]
+        assert table_structure["id"]["Type"] == ["int"]
+        assert table_structure["id"]["Params"]["AI"] == "Y"
+        assert table_structure["id"]["Params"]["PrimaryKey"] == ["Y", "A"]
+        assert table_structure["id"]["Comment"] == "Identifier"
+        assert table_structure["country_code"]["Params"]["FKey"] == [1, 1, "country", "code", "R", "N"]
+        assert table_structure["country_code"]["Params"]["Index"] == [1, 1, "A", "U"]
+        assert table_structure["country_code"]["Params"]["NN"] == "Y"
+        assert table_structure["name"]["Type"] == ["varchar", 30]
+        assert table_structure["name"]["Params"]["Index"] == [1, 2, "A", "U"]
+        assert table_structure["name"]["Params"]["DEF"] == "Active"
+        assert table_structure["name"]["Possible Values"] == ""
+
     def test_build_default_field_params_builds_legacy_field_defaults(self):
         """SQLDbWrpr._build_default_field_params builds the legacy field parameter defaults."""
         field_params = SQLDbWrpr._build_default_field_params()
