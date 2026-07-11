@@ -172,8 +172,11 @@ def make_db_container_fixture(*, db_class):
             environment = {
                 "POSTGRES_DB": settings.MYSQL_DATABASE,
                 "POSTGRES_USER": settings.INSTALLER_USERID,
-                "POSTGRES_PASSWORD": settings.INSTALLER_PWD,
             }
+            if settings.INSTALLER_PWD:
+                environment["POSTGRES_PASSWORD"] = settings.INSTALLER_PWD
+            else:
+                environment["POSTGRES_HOST_AUTH_METHOD"] = "trust"
         else:
             image = "mysql:8.0"
             container_port = "3306/tcp"
