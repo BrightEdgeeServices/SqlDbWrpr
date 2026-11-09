@@ -95,6 +95,7 @@ class SQLDbWrpr:
         self.inline_indexes = True
         self.msg_width = p_msg_width
         self.non_char_fields = {}
+        self.owns_connection = True
         self._password = p_password
         self.re_create_db = p_recreate_db
         self.silent = p_verbose
@@ -104,10 +105,16 @@ class SQLDbWrpr:
         self.get_db_field_types()
         self.db_port = p_db_port
 
+    def _execute_import_rows(self, p_table_name, p_header, p_rows, p_replace):
+        """Execute one prepared import batch without managing its transaction."""
+        self.cur.executemany(self.build_insert_sql(p_table_name, p_header, p_replace), p_rows)
+
     def close(self):
-        """Close the active database connection."""
-        if self.conn:
+        """Close owned connections, or just this wrapper's cursor on a borrowed connection."""
+        if self.conn and self.owns_connection:
             self.conn.close()
+        elif self.cur:
+            self.cur.close()
 
     def build_column_sql(self, p_field_name, p_field_type, p_field_params, p_field_comment):
         """Build SQL for one column in a CREATE TABLE statement."""
@@ -762,6 +769,7 @@ class SQLDbWrpr:
         p_vol_type="Multi",
         p_verbose=False,
         p_replace=False,
+        p_manage_transaction=True,
     ):
         """Import CSV rows into a database table.
 
@@ -790,7 +798,11 @@ class SQLDbWrpr:
         - p_replace = False
           - False - INSERT into database
           - True - REPLACE into database
+        - p_manage_transaction = True
+          - False leaves commits and rollbacks to the caller and propagates database errors.
         """
+        if not p_manage_transaction and self.conn.autocommit:
+            raise ValueError("Caller-managed imports require autocommit=False")
 
         def import_volume(p_csv_db, p_header, p_verbose):
             """Prepare and write one in-memory CSV volume to the active table."""
@@ -905,6 +917,12 @@ class SQLDbWrpr:
 
             def write_to_table(p_csv_db):
                 """Write prepared rows to the destination table."""
+                if not p_manage_transaction:
+                    for start in range(1, len(p_csv_db), self.batch_size):
+                        self._execute_import_rows(
+                            p_table_name, header, p_csv_db[start : start + self.batch_size], p_replace
+                        )
+                    return
                 i = 1
                 j = 0  # In case batch size is more than all records
                 list_len = len(p_csv_db)
@@ -1032,6 +1050,7 @@ class SQLDbWrpr:
         p_insert_header=False,
         p_verbose=False,
         p_debug=False,
+        p_manage_transaction=True,
     ):
         """Split CSV rows into one or more destination table imports.
 
@@ -1194,6 +1213,7 @@ class SQLDbWrpr:
                 p_header=new_header,
                 p_verbose=p_verbose,
                 p_replace=p_split_struct[seq]["Replace"],
+                p_manage_transaction=p_manage_transaction,
             )
 
     @classmethod
@@ -1570,9 +1590,19 @@ class PostgreSQL(SQLDbWrpr):
         p_verbose=False,
         p_db_port="5432",
         p_maintenance_db="postgres",
+        p_connection=None,
         **kwargs,
     ):
-        """Create a PostgreSQL wrapper and optionally recreate the target database."""
+        """Create a PostgreSQL wrapper, optionally borrowing a caller-owned DB-API connection.
+
+        A borrowed connection is never closed or reconfigured. Use
+        p_manage_transaction=False on imports to keep its transaction caller-owned.
+        Database recreation is unavailable on borrowed connections.
+        """
+        if p_connection is not None and p_recreate_db:
+            raise ValueError("Cannot recreate a database on a borrowed connection")
+        if p_batch_size < 1:
+            raise ValueError("Batch size must be positive")
         super().__init__(
             p_host_name=p_host_name,
             p_user_name=p_user_name,
@@ -1594,13 +1624,26 @@ class PostgreSQL(SQLDbWrpr):
         self.maintenance_db = p_maintenance_db
         self._connection_kwargs = kwargs
         connect_db = self.maintenance_db if self.re_create_db else self.db_name
-        self.conn = self._connect(connect_db)
-        self.conn.autocommit = True
+        self.owns_connection = p_connection is None
+        self.conn = self._connect(connect_db) if self.owns_connection else p_connection
+        if self.owns_connection:
+            self.conn.autocommit = True
         self.cur = self.conn.cursor()
         if self.re_create_db:
             if self.create_db():
                 self.create_tables()
         self.success = True
+
+    def _execute_import_rows(self, p_table_name, p_header, p_rows, p_replace):
+        """Use batched VALUES for psycopg2; retain native executemany for other drivers."""
+        if type(self.conn).__module__.split(".")[0] == "psycopg2":
+            # Borrowing this driver implies the host already has psycopg2 installed.
+            from psycopg2.extras import execute_values
+
+            statement = self.build_insert_sql(p_table_name, p_header, p_replace, p_multi_row=True)
+            execute_values(self.cur, statement, p_rows, page_size=self.batch_size)
+        else:
+            super()._execute_import_rows(p_table_name, p_header, p_rows, p_replace)
 
     def build_column_sql(self, p_field_name, p_field_type, p_field_params, p_field_comment):
         """Build PostgreSQL SQL for one column in a CREATE TABLE statement."""
@@ -1624,12 +1667,13 @@ class PostgreSQL(SQLDbWrpr):
             ",".join(index_fields),
         )
 
-    def build_insert_sql(self, p_table_name, p_header, p_replace=False):
+    def build_insert_sql(self, p_table_name, p_header, p_replace=False, p_multi_row=False):
         """Build a PostgreSQL INSERT or upsert statement."""
-        insert_sql = "INSERT INTO {} ({}) VALUES ({})".format(
+        values_sql = "%s" if p_multi_row else f"({','.join(self.param_placeholder() for _ in p_header)})"
+        insert_sql = "INSERT INTO {} ({}) VALUES {}".format(
             self.quote_identifier(p_table_name),
             ",".join([self.quote_identifier(str(x)) for x in p_header]),
-            ",".join([self.param_placeholder() for x in range(len(p_header))]),
+            values_sql,
         )
         if not p_replace:
             return insert_sql
@@ -1702,6 +1746,32 @@ class PostgreSQL(SQLDbWrpr):
         if field_type == "decimal":
             return f"DECIMAL({str(p_field_type[1])}, {str(p_field_type[2])})"
         return type_map.get(field_type, field_type.upper())
+
+    def update_rows(self, p_table_name, p_header, p_rows, p_key="id"):
+        """Update supplied columns in bounded batches; the caller owns commit and rollback.
+
+        p_header must contain p_key and at least one update column. Unlike an
+        upsert, this never creates missing records or supplies defaults.
+        """
+        if p_key not in p_header or len(set(p_header)) != len(p_header) or len(p_header) < 2:
+            raise ValueError("Updates require a unique header containing the key and update columns")
+        if self.conn.autocommit:
+            raise ValueError("Caller-managed updates require autocommit=False")
+        fields = [field for field in p_header if field != p_key]
+        indexes = [p_header.index(field) for field in [*fields, p_key]]
+        assignments = ",".join(f"{self.quote_identifier(field)} = %s" for field in fields)
+        statement = (
+            f"UPDATE {self.quote_identifier(p_table_name)} SET {assignments} "
+            f"WHERE {self.quote_identifier(p_key)} = %s"
+        )
+        for start in range(0, len(p_rows), self.batch_size):
+            rows = [tuple(row[index] for index in indexes) for row in p_rows[start : start + self.batch_size]]
+            if type(self.conn).__module__.split(".")[0] == "psycopg2":
+                from psycopg2.extras import execute_batch
+
+                execute_batch(self.cur, statement, rows, page_size=self.batch_size)
+            else:
+                self.cur.executemany(statement, rows)
 
     def _connect(self, p_db_name):
         """Open a PostgreSQL connection."""

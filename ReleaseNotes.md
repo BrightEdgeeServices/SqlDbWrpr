@@ -1,3 +1,20 @@
+# Release 5.2.0
+
+### Added
+
+- Optional borrowed PostgreSQL DB-API connections. Closing the wrapper closes only its cursor on borrowed connections.
+- Caller-owned import transactions via `p_manage_transaction=False` on `import_csv` and `import_and_split_csv`. Errors propagate without internal commits, rollbacks or record recovery; autocommit connections are rejected in this mode.
+- Batched `update_rows` for updating supplied columns without inserting missing records. Transactions belong to the caller.
+- Efficient batched PostgreSQL writes for borrowed psycopg2 connections; native psycopg keeps its existing execution path.
+- Real PostgreSQL transaction tests for both drivers, including visibility, rollback, split imports and connection ownership.
+
+### Compatibility
+
+- Existing constructor, CSV preparation, split directives and default import transaction behavior remain unchanged.
+- psycopg2 remains an optional host-provided driver when borrowing its connections.
+
+______________________________________________________________________
+
 # Release 5.1.1
 
 2026-07-11 11:46 UTC+02:00
