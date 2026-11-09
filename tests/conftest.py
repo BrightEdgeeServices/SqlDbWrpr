@@ -9,6 +9,8 @@ from beetools.utils import rm_tree
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
 
+from tests.fixtures.postgresql import transaction_database  # noqa: F401
+
 load_dotenv()
 
 
